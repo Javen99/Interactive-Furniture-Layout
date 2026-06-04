@@ -74,6 +74,11 @@ export type LayoutScene = {
   id: string;
   name: string;
   description: string;
+  metadata?: {
+    difficulty: "intro" | "moderate" | "stress";
+    baselineName: string;
+    evaluationSeeds: string[];
+  };
   room: RoomPlan;
   props: PropItem[];
   weights: CostWeights;
@@ -92,6 +97,8 @@ export type ScoreTerm = {
 
 export type ScoreResult = {
   total: number;
+  hardCost: number;
+  softCost: number;
   terms: ScoreTerm[];
   hardViolations: number;
 };
@@ -102,6 +109,36 @@ export type Suggestion = {
   seed: string;
   score: ScoreResult;
   scene: LayoutScene;
+};
+
+export type OptimizerHistoryPoint = {
+  iteration: number;
+  score: number;
+  hardViolations: number;
+};
+
+export type RejectedCostCause = {
+  key: ScoreTermKey;
+  label: string;
+  count: number;
+  weightedDelta: number;
+};
+
+export type OptimizerDiagnostics = {
+  iterations: number;
+  acceptedMoves: number;
+  rejectedMoves: number;
+  acceptanceRate: number;
+  initialScore: number;
+  bestScore: number;
+  bestHardViolations: number;
+  bestScoreHistory: OptimizerHistoryPoint[];
+  topRejectedCostCauses: RejectedCostCause[];
+};
+
+export type OptimizerRun = {
+  suggestions: Suggestion[];
+  diagnostics: OptimizerDiagnostics;
 };
 
 export type OptimizerOptions = {
@@ -116,6 +153,24 @@ export type BenchmarkResult = {
   seed: string;
   initialScore: number;
   optimizedScore: number;
+  initialHardViolations: number;
+  optimizedHardViolations: number;
+  hardCostImprovement: number;
+  softCostImprovement: number;
   improvement: number;
+  acceptanceRate: number;
+  termDeltas: Array<{
+    key: ScoreTermKey;
+    label: string;
+    improvement: number;
+  }>;
 };
 
+export type BenchmarkSummary = {
+  best: number;
+  worst: number;
+  median: number;
+  mean: number;
+  standardDeviation: number;
+  successRate: number;
+};

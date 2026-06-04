@@ -28,6 +28,10 @@ export default function ScorePanel({ score }: ScorePanelProps) {
           <span key={term.key}>{term.label}</span>
         ))}
       </div>
+      <div className="mini-metrics">
+        <span>{score.hardCost.toFixed(1)} hard cost</span>
+        <span>{score.softCost.toFixed(1)} soft cost</span>
+      </div>
       <div className="term-list">
         {score.terms.map((term) => (
           <div className="term-row" key={term.key} title={term.explanation}>
@@ -45,4 +49,3 @@ export default function ScorePanel({ score }: ScorePanelProps) {
     </section>
   );
 }
-

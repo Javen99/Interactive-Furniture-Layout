@@ -1,7 +1,7 @@
 import { clampPropToSurface, distance, findSurfaceForProp, getPlacementBounds, normalizeDegrees } from "./geometry";
 import { createRng, type Rng } from "./random";
 import { scoreScene } from "./scoring";
-import type { LayoutScene, OptimizerOptions, PropItem, Suggestion, Surface } from "./types";
+import type { LayoutScene, OptimizerOptions, OptimizerDiagnostics, OptimizerRun, PropItem, RejectedCostCause, ScoreResult, Suggestion, Surface } from "./types";
 
 const defaultOptions: OptimizerOptions = {
   seed: "layout-lab",
@@ -14,6 +14,7 @@ const defaultOptions: OptimizerOptions = {
 export function cloneScene(scene: LayoutScene): LayoutScene {
   return {
     ...scene,
+    metadata: scene.metadata ? { ...scene.metadata, evaluationSeeds: [...scene.metadata.evaluationSeeds] } : undefined,
     room: {
       ...scene.room,
       walls: scene.room.walls.map((wall) => ({ ...wall })),
@@ -206,12 +207,77 @@ export function normalizeScene(scene: LayoutScene): LayoutScene {
   };
 }
 
-export function generateSuggestions(scene: LayoutScene, requestedOptions: Partial<OptimizerOptions> = {}): Suggestion[] {
+function dominantRejectedCause(currentScore: ScoreResult, proposalScore: ScoreResult): RejectedCostCause | null {
+  const deltas = proposalScore.terms
+    .map((term) => {
+      const current = currentScore.terms.find((candidate) => candidate.key === term.key);
+      return {
+        key: term.key,
+        label: term.label,
+        count: 1,
+        weightedDelta: Number((term.weighted - (current?.weighted ?? 0)).toFixed(2))
+      };
+    })
+    .filter((delta) => delta.weightedDelta > 0)
+    .sort((a, b) => b.weightedDelta - a.weightedDelta);
+
+  return deltas[0] ?? null;
+}
+
+function addRejectedCause(causes: Map<string, RejectedCostCause>, cause: RejectedCostCause | null) {
+  if (!cause) {
+    return;
+  }
+  const existing = causes.get(cause.key);
+  if (!existing) {
+    causes.set(cause.key, cause);
+    return;
+  }
+  causes.set(cause.key, {
+    ...existing,
+    count: existing.count + 1,
+    weightedDelta: Number((existing.weightedDelta + cause.weightedDelta).toFixed(2))
+  });
+}
+
+function makeDiagnostics(
+  options: OptimizerOptions,
+  acceptedMoves: number,
+  rejectedMoves: number,
+  initialScore: ScoreResult,
+  bestScore: ScoreResult,
+  bestScoreHistory: OptimizerDiagnostics["bestScoreHistory"],
+  rejectedCauses: Map<string, RejectedCostCause>
+): OptimizerDiagnostics {
+  return {
+    iterations: options.iterations,
+    acceptedMoves,
+    rejectedMoves,
+    acceptanceRate: Number((acceptedMoves / Math.max(options.iterations, 1)).toFixed(3)),
+    initialScore: initialScore.total,
+    bestScore: bestScore.total,
+    bestHardViolations: bestScore.hardViolations,
+    bestScoreHistory,
+    topRejectedCostCauses: [...rejectedCauses.values()]
+      .sort((a, b) => b.weightedDelta - a.weightedDelta)
+      .slice(0, 3)
+  };
+}
+
+export function generateSuggestionsWithDiagnostics(scene: LayoutScene, requestedOptions: Partial<OptimizerOptions> = {}): OptimizerRun {
   const options = { ...defaultOptions, ...requestedOptions };
   const baseline = cloneScene(scene);
   const rng = createRng(options.seed);
   let current = normalizeScene(cloneScene(scene));
   let currentScore = scoreScene(current, baseline);
+  const initialScore = currentScore;
+  let bestScore = currentScore;
+  let acceptedMoves = 0;
+  let rejectedMoves = 0;
+  const rejectedCauses = new Map<string, RejectedCostCause>();
+  const bestScoreHistory: OptimizerDiagnostics["bestScoreHistory"] = [
+    { iteration: 0, score: currentScore.total, hardViolations: currentScore.hardViolations }
+  ];
   let candidates: Suggestion[] = [];
 
   candidates = keepCandidate(
@@ -232,10 +298,21 @@ export function generateSuggestions(scene: LayoutScene, requestedOptions: Partia
     const proposal = propose(current, rng, progress);
     const proposalScore = scoreScene(proposal, baseline);
     const delta = proposalScore.total - currentScore.total;
+    const accepted = delta <= 0 || Math.exp(-delta / Math.max(temperature, 0.001)) > rng.next();
 
-    if (delta <= 0 || Math.exp(-delta / Math.max(temperature, 0.001)) > rng.next()) {
+    if (accepted) {
       current = proposal;
       currentScore = proposalScore;
+      acceptedMoves += 1;
+      if (
+        proposalScore.hardViolations < bestScore.hardViolations ||
+        (proposalScore.hardViolations === bestScore.hardViolations && proposalScore.total < bestScore.total)
+      ) {
+        bestScore = proposalScore;
+      }
+    } else {
+      rejectedMoves += 1;
+      addRejectedCause(rejectedCauses, dominantRejectedCause(currentScore, proposalScore));
     }
 
     if (iteration % 18 === 0 || proposalScore.hardViolations === 0) {
@@ -251,9 +328,13 @@ export function generateSuggestions(scene: LayoutScene, requestedOptions: Partia
         options.suggestionCount
       );
     }
+
+    if (iteration > 0 && iteration % Math.max(100, Math.floor(options.iterations / 24)) === 0) {
+      bestScoreHistory.push({ iteration, score: bestScore.total, hardViolations: bestScore.hardViolations });
+    }
   }
 
-  return candidates
+  const suggestions = candidates
     .sort((a, b) => {
       if (a.score.hardViolations !== b.score.hardViolations) {
         return a.score.hardViolations - b.score.hardViolations;
@@ -262,6 +343,18 @@ export function generateSuggestions(scene: LayoutScene, requestedOptions: Partia
     })
     .slice(0, options.suggestionCount)
     .map((suggestion, index) => ({ ...suggestion, rank: index + 1 }));
+
+  const finalBest = suggestions[0]?.score ?? bestScore;
+  bestScoreHistory.push({ iteration: options.iterations, score: finalBest.total, hardViolations: finalBest.hardViolations });
+
+  return {
+    suggestions,
+    diagnostics: makeDiagnostics(options, acceptedMoves, rejectedMoves, initialScore, finalBest, bestScoreHistory, rejectedCauses)
+  };
+}
+
+export function generateSuggestions(scene: LayoutScene, requestedOptions: Partial<OptimizerOptions> = {}): Suggestion[] {
+  return generateSuggestionsWithDiagnostics(scene, requestedOptions).suggestions;
 }
 
 export function getPinnedDrift(scene: LayoutScene, baseline: LayoutScene): number {
@@ -272,4 +365,3 @@ export function getPinnedDrift(scene: LayoutScene, baseline: LayoutScene): numbe
       return original ? sum + distance(prop.pose, original.pose) : sum;
     }, 0);
 }
-

@@ -1,10 +1,11 @@
 import { Play, RefreshCcw, SlidersHorizontal, Wand2 } from "lucide-react";
-import type { Suggestion } from "../domain/types";
+import type { OptimizerDiagnostics, Suggestion } from "../domain/types";
 
 type OptimizerPanelProps = {
   seed: string;
   iterations: number;
   suggestions: Suggestion[];
+  diagnostics: OptimizerDiagnostics | null;
   onSeedChange: (seed: string) => void;
   onIterationsChange: (iterations: number) => void;
   onRun: () => void;
@@ -16,6 +17,7 @@ export default function OptimizerPanel({
   seed,
   iterations,
   suggestions,
+  diagnostics,
   onSeedChange,
   onIterationsChange,
   onRun,
@@ -77,7 +79,13 @@ export default function OptimizerPanel({
           ))
         )}
       </div>
+      {diagnostics ? (
+        <div className="mini-metrics optimizer-metrics">
+          <span>{diagnostics.bestScore.toFixed(1)} best</span>
+          <span>{Math.round(diagnostics.acceptanceRate * 100)}% accepted</span>
+          <span>{diagnostics.bestHardViolations === 0 ? "clear" : `${diagnostics.bestHardViolations} hard`}</span>
+        </div>
+      ) : null}
     </section>
   );
 }
-

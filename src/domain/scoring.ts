@@ -57,6 +57,8 @@ const fixtureTargets: Array<{ fixture: Fixture["kind"]; tags: string[]; preferre
   { fixture: "hob", tags: ["pan", "pot", "cooking", "spice"], preferred: 90, tolerance: 140 }
 ];
 
+const hardTermKeys: ScoreTermKey[] = ["containment", "collision", "pinned"];
+
 function makeTerm(key: ScoreTermKey, raw: number, weights: CostWeights): ScoreTerm {
   const roundedRaw = Number(raw.toFixed(4));
   return {
@@ -218,9 +220,13 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
     makeTerm("balance", balance, scene.weights),
     makeTerm("visibility", visibility, scene.weights)
   ];
+  const hardCost = terms.filter((term) => hardTermKeys.includes(term.key)).reduce((sum, term) => sum + term.weighted, 0);
+  const total = terms.reduce((sum, term) => sum + term.weighted, 0);
 
   return {
-    total: Number(terms.reduce((sum, term) => sum + term.weighted, 0).toFixed(2)),
+    total: Number(total.toFixed(2)),
+    hardCost: Number(hardCost.toFixed(2)),
+    softCost: Number((total - hardCost).toFixed(2)),
     terms,
     hardViolations
   };
@@ -229,4 +235,3 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
 export function getDominantTerms(score: ScoreResult, limit = 3): ScoreTerm[] {
   return [...score.terms].sort((a, b) => b.weighted - a.weighted).slice(0, limit);
 }
-

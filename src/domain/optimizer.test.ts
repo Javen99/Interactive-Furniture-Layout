@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateSuggestions, getPinnedDrift } from "./optimizer";
+import { generateSuggestions, generateSuggestionsWithDiagnostics, getPinnedDrift } from "./optimizer";
 import { galleyKitchen } from "./presets";
 import { scoreScene } from "./scoring";
 
@@ -20,5 +20,12 @@ describe("optimizer", () => {
     const [best] = generateSuggestions(galleyKitchen, { seed: "improve", iterations: 1200, suggestionCount: 1 });
     expect(best.score.total).toBeLessThanOrEqual(scoreScene(galleyKitchen).total);
   });
-});
 
+  it("reports deterministic diagnostics", () => {
+    const first = generateSuggestionsWithDiagnostics(galleyKitchen, { seed: "diag", iterations: 900, suggestionCount: 2 });
+    const second = generateSuggestionsWithDiagnostics(galleyKitchen, { seed: "diag", iterations: 900, suggestionCount: 2 });
+    expect(first.diagnostics.acceptanceRate).toBe(second.diagnostics.acceptanceRate);
+    expect(first.diagnostics.bestScoreHistory).toEqual(second.diagnostics.bestScoreHistory);
+    expect(first.diagnostics.topRejectedCostCauses).toEqual(second.diagnostics.topRejectedCostCauses);
+  });
+});
