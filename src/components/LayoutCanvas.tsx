@@ -116,6 +116,27 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
             </text>
           </g>
         ))}
+        {(scene.room.accessZones ?? []).map((zone) => (
+          <g key={zone.id}>
+            <rect className={`access-zone access-zone-${zone.kind}`} x={zone.x} y={zone.y} width={zone.width} height={zone.height} rx="5" />
+            <text className="access-label" x={zone.x + zone.width / 2} y={zone.y + zone.height / 2 + 4}>
+              {zone.label}
+            </text>
+          </g>
+        ))}
+        {(scene.room.pathways ?? []).map((pathway) => (
+          <g key={pathway.id}>
+            <line
+              className="pathway"
+              x1={pathway.start.x}
+              y1={pathway.start.y}
+              x2={pathway.end.x}
+              y2={pathway.end.y}
+              strokeWidth={pathway.width}
+            />
+            <line className="pathway-center" x1={pathway.start.x} y1={pathway.start.y} x2={pathway.end.x} y2={pathway.end.y} />
+          </g>
+        ))}
         <line className="view-line" x1={scene.room.viewPoint.x} y1={scene.room.viewPoint.y} x2={scene.room.focalPoint.x} y2={scene.room.focalPoint.y} />
         <circle className="view-point" cx={scene.room.viewPoint.x} cy={scene.room.viewPoint.y} r="7" />
         <circle className="focal-point" cx={scene.room.focalPoint.x} cy={scene.room.focalPoint.y} r="6" />
@@ -153,4 +174,3 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
     </section>
   );
 }
-

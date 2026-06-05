@@ -6,9 +6,11 @@ type OptimizerPanelProps = {
   iterations: number;
   suggestions: Suggestion[];
   diagnostics: OptimizerDiagnostics | null;
+  isRunning: boolean;
   onSeedChange: (seed: string) => void;
   onIterationsChange: (iterations: number) => void;
   onRun: () => void;
+  onApplyBest: () => void;
   onApplySuggestion: (suggestion: Suggestion) => void;
   onReset: () => void;
 };
@@ -18,9 +20,11 @@ export default function OptimizerPanel({
   iterations,
   suggestions,
   diagnostics,
+  isRunning,
   onSeedChange,
   onIterationsChange,
   onRun,
+  onApplyBest,
   onApplySuggestion,
   onReset
 }: OptimizerPanelProps) {
@@ -47,15 +51,25 @@ export default function OptimizerPanel({
         <strong>{iterations}</strong>
       </label>
       <div className="button-row">
-        <button className="primary" type="button" onClick={onRun}>
+        <button className="primary" type="button" onClick={onRun} disabled={isRunning}>
           <Play size={17} />
-          Run
+          {isRunning ? "Running" : "Run"}
         </button>
-        <button type="button" onClick={onReset}>
+        <button type="button" onClick={onApplyBest} disabled={suggestions.length === 0 || isRunning}>
+          <SlidersHorizontal size={17} />
+          Apply best
+        </button>
+        <button type="button" onClick={onReset} disabled={isRunning}>
           <RefreshCcw size={17} />
           Reset
         </button>
       </div>
+      {isRunning ? (
+        <div className="run-state">
+          <span />
+          <strong>Searching seeded layout alternatives</strong>
+        </div>
+      ) : null}
       <div className="suggestions">
         <div className="suggestions-title">
           <SlidersHorizontal size={16} />

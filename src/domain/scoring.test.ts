@@ -30,5 +30,13 @@ describe("scoring", () => {
     const farProximity = scoreScene(far).terms.find((term) => term.key === "proximity")!.weighted;
     expect(nearProximity).toBeLessThan(farProximity);
   });
-});
 
+  it("penalizes blocked access zones", () => {
+    const clear = cloneScene(galleyKitchen);
+    const blocked = cloneScene(galleyKitchen);
+    blocked.props.find((prop) => prop.id === "board")!.pose = { x: 296, y: 194, rotation: 0, surfaceId: "back-run" };
+    const clearAccess = scoreScene(clear).terms.find((term) => term.key === "accessibility")!.weighted;
+    const blockedAccess = scoreScene(blocked).terms.find((term) => term.key === "accessibility")!.weighted;
+    expect(blockedAccess).toBeGreaterThan(clearAccess);
+  });
+});

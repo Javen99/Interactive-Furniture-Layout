@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { axisRectToOrientedRect, orientedRectInsideAxisRect, orientedRectsOverlap, propToOrientedRect } from "./geometry";
+import { axisRectsOverlap, axisRectToOrientedRect, orientedRectBlocksPathway, orientedRectInsideAxisRect, orientedRectsOverlap, propToOrientedRect } from "./geometry";
 import type { PropItem, Surface } from "./types";
 
 const surface: Surface = {
@@ -45,5 +45,32 @@ describe("geometry", () => {
     expect(orientedRectsOverlap(propToOrientedRect(prop("near", 90, 40, 0)), fixture)).toBe(true);
     expect(orientedRectsOverlap(propToOrientedRect(prop("far", 30, 40, 0)), fixture)).toBe(false);
   });
-});
 
+  it("detects access-zone rectangle intersections", () => {
+    expect(
+      axisRectsOverlap(
+        { id: "a", label: "A", x: 20, y: 20, width: 40, height: 30 },
+        { id: "b", label: "B", x: 45, y: 25, width: 30, height: 30 }
+      )
+    ).toBe(true);
+    expect(
+      axisRectsOverlap(
+        { id: "a", label: "A", x: 20, y: 20, width: 40, height: 30 },
+        { id: "b", label: "B", x: 80, y: 25, width: 30, height: 30 }
+      )
+    ).toBe(false);
+  });
+
+  it("detects props blocking pathway clearance", () => {
+    const pathway = {
+      id: "walk",
+      label: "Walkway",
+      start: { x: 0, y: 50 },
+      end: { x: 200, y: 50 },
+      width: 48,
+      importance: 1
+    };
+    expect(orientedRectBlocksPathway(propToOrientedRect(prop("blocked", 100, 56, 0)), pathway)).toBe(true);
+    expect(orientedRectBlocksPathway(propToOrientedRect(prop("clear", 100, 96, 0)), pathway)).toBe(false);
+  });
+});

@@ -1,6 +1,6 @@
 import { generateSuggestionsWithDiagnostics } from "./optimizer";
 import { scoreScene } from "./scoring";
-import type { BenchmarkResult, BenchmarkSummary, LayoutScene } from "./types";
+import type { BenchmarkReport, BenchmarkResult, BenchmarkSummary, LayoutScene, Suggestion } from "./types";
 
 export function runBenchmark(scene: LayoutScene, seeds: string[], iterations = 2200): BenchmarkResult[] {
   const initial = scoreScene(scene);
@@ -51,5 +51,23 @@ export function summarizeBenchmark(results: BenchmarkResult[]): BenchmarkSummary
     mean: Number(mean.toFixed(2)),
     standardDeviation: Number(Math.sqrt(variance).toFixed(2)),
     successRate: Number((results.filter((result) => result.improvement > 0).length / results.length).toFixed(2))
+  };
+}
+
+export function createBenchmarkReport(scene: LayoutScene, results: BenchmarkResult[], suggestions: Suggestion[] = []): BenchmarkReport {
+  const summary = summarizeBenchmark(results);
+  const best = [...results].sort((a, b) => a.optimizedScore - b.optimizedScore)[0];
+  return {
+    generatedAt: new Date().toISOString(),
+    scenarioId: scene.id,
+    scenarioName: scene.name,
+    seeds: results.map((result) => result.seed),
+    initialScore: results[0]?.initialScore ?? scoreScene(scene).total,
+    optimizedBestScore: best?.optimizedScore ?? scoreScene(scene).total,
+    initialHardViolations: results[0]?.initialHardViolations ?? scoreScene(scene).hardViolations,
+    optimizedBestHardViolations: best?.optimizedHardViolations ?? scoreScene(scene).hardViolations,
+    summary,
+    results,
+    selectedSuggestionIds: suggestions.map((suggestion) => suggestion.id)
   };
 }

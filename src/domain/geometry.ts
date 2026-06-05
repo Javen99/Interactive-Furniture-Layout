@@ -1,4 +1,4 @@
-import type { AxisAlignedRect, PropItem, Surface, Vec2 } from "./types";
+import type { AxisAlignedRect, Pathway, PropItem, Surface, Vec2 } from "./types";
 
 export type OrientedRect = {
   id: string;
@@ -110,6 +110,10 @@ export function orientedRectsOverlap(a: OrientedRect, b: OrientedRect): boolean 
   return polygonsOverlap(orientedRectCorners(a), orientedRectCorners(b));
 }
 
+export function axisRectsOverlap(a: AxisAlignedRect, b: AxisAlignedRect): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
 export function orientedRectInsideAxisRect(rect: OrientedRect, container: AxisAlignedRect): boolean {
   return orientedRectCorners(rect).every(
     (point) =>
@@ -166,6 +170,11 @@ export function pointLineDistance(point: Vec2, start: Vec2, end: Vec2): number {
     y: start.y + t * (end.y - start.y)
   };
   return distance(point, projection);
+}
+
+export function orientedRectBlocksPathway(rect: OrientedRect, pathway: Pathway): boolean {
+  const halfClearance = pathway.width / 2 + Math.min(rect.width, rect.height) / 2;
+  return pointLineDistance(rect.center, pathway.start, pathway.end) < halfClearance;
 }
 
 export function findSurfaceForProp(prop: PropItem, surfaces: Surface[]): Surface | undefined {
@@ -235,4 +244,3 @@ export function frontEdgeDistance(point: Vec2, surface: Surface): number {
       return nearestWallEdgeDistance(point, surface);
   }
 }
-

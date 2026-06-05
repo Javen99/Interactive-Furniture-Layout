@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ClipboardCheck } from "lucide-react";
 import DiagnosticsPanel from "./components/DiagnosticsPanel";
 import EvaluationPanel from "./components/EvaluationPanel";
+import ReviewPanel from "./components/ReviewPanel";
 import LayoutCanvas from "./components/LayoutCanvas";
 import ScorePanel from "./components/ScorePanel";
 import ObjectPalette from "./components/ObjectPalette";
 import OptimizerPanel from "./components/OptimizerPanel";
 import JsonPanel from "./components/JsonPanel";
 import { clampPropToSurface, findSurfaceForProp, normalizeDegrees } from "./domain/geometry";
-import { runBenchmark, summarizeBenchmark } from "./domain/evaluation";
+import { createBenchmarkReport, runBenchmark, summarizeBenchmark } from "./domain/evaluation";
 import { cloneScene, generateSuggestionsWithDiagnostics, normalizeScene } from "./domain/optimizer";
 import { presets } from "./domain/presets";
 import { scoreScene } from "./domain/scoring";
@@ -44,6 +45,7 @@ export default function App() {
   const [iterations, setIterations] = useState(3500);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [diagnostics, setDiagnostics] = useState<OptimizerDiagnostics | null>(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [json, setJson] = useState(() => exportScene(presets[0]));
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [benchVisible, setBenchVisible] = useState(false);
@@ -63,7 +65,6 @@ export default function App() {
     setJson(exportScene(next));
     setJsonError(null);
     setBenchmark(null);
-    setDiagnostics(null);
   };
 
   const moveProp = (id: string, x: number, y: number) => {
@@ -92,6 +93,7 @@ export default function App() {
       })
     );
     setBenchmark(null);
+    setDiagnostics(null);
   };
 
   const togglePin = (id: string) => {
@@ -113,16 +115,33 @@ export default function App() {
   };
 
   const runOptimizer = () => {
-    const run = generateSuggestionsWithDiagnostics(scene, {
-      seed,
-      iterations,
-      suggestionCount: 5,
-      startTemperature: 18,
-      endTemperature: 0.1
-    });
-    setSuggestions(run.suggestions);
-    setDiagnostics(run.diagnostics);
+    if (isOptimizing) {
+      return;
+    }
+    setIsOptimizing(true);
     setBenchmark(null);
+    window.setTimeout(() => {
+      try {
+        const run = generateSuggestionsWithDiagnostics(scene, {
+          seed,
+          iterations,
+          suggestionCount: 5,
+          startTemperature: 18,
+          endTemperature: 0.1
+        });
+        setSuggestions(run.suggestions);
+        setDiagnostics(run.diagnostics);
+      } finally {
+        setIsOptimizing(false);
+      }
+    }, 20);
+  };
+
+  const applyBestSuggestion = () => {
+    const best = suggestions[0];
+    if (best) {
+      applySuggestion(best);
+    }
   };
 
   const applySuggestion = (suggestion: Suggestion) => {
@@ -139,6 +158,10 @@ export default function App() {
     setDiagnostics(null);
     setJson(exportScene(reset));
     setBenchmark(null);
+  };
+
+  const resetScenario = () => {
+    loadPreset(presetId);
   };
 
   const exportCurrentScene = () => {
@@ -167,6 +190,16 @@ export default function App() {
     const results = runBenchmark(scene, scene.metadata?.evaluationSeeds ?? ["alpha", "bravo", "charlie"], Math.min(iterations, 2600));
     setBenchmark({ results, summary: summarizeBenchmark(results) });
     setBenchVisible(true);
+  };
+
+  const exportBenchmarkReport = () => {
+    if (!benchmark) {
+      return;
+    }
+    const exported = JSON.stringify(createBenchmarkReport(scene, benchmark.results, suggestions), null, 2);
+    setJson(exported);
+    setJsonError(null);
+    navigator.clipboard?.writeText(exported).catch(() => undefined);
   };
 
   return (
@@ -205,6 +238,9 @@ export default function App() {
               );
             })}
           </div>
+          <button type="button" onClick={resetScenario}>
+            Reset scenario
+          </button>
         </section>
         <ObjectPalette scene={scene} selectedId={selectedId} onSelect={setSelectedId} onRotate={rotateProp} onTogglePin={togglePin} />
         <OptimizerPanel
@@ -212,9 +248,11 @@ export default function App() {
           iterations={iterations}
           suggestions={suggestions}
           diagnostics={diagnostics}
+          isRunning={isOptimizing}
           onSeedChange={setSeed}
           onIterationsChange={setIterations}
           onRun={runOptimizer}
+          onApplyBest={applyBestSuggestion}
           onApplySuggestion={applySuggestion}
           onReset={resetScene}
         />
@@ -228,8 +266,10 @@ export default function App() {
           summary={benchmark?.summary ?? null}
           onToggle={() => setBenchVisible((visible) => !visible)}
           onRun={runEvaluation}
+          onExportReport={exportBenchmarkReport}
         />
         <DiagnosticsPanel diagnostics={diagnostics} />
+        <ReviewPanel suggestions={suggestions} currentScene={scene} onApplySuggestion={applySuggestion} />
         <JsonPanel json={json} error={jsonError} onJsonChange={setJson} onExport={exportCurrentScene} onImport={importCurrentScene} />
         <section className="panel research-note">
           <div className="panel-title">

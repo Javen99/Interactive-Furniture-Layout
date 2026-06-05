@@ -20,6 +20,8 @@ export function cloneScene(scene: LayoutScene): LayoutScene {
       walls: scene.room.walls.map((wall) => ({ ...wall })),
       surfaces: scene.room.surfaces.map((surface) => ({ ...surface })),
       fixtures: scene.room.fixtures.map((fixture) => ({ ...fixture })),
+      accessZones: scene.room.accessZones?.map((zone) => ({ ...zone })),
+      pathways: scene.room.pathways?.map((pathway) => ({ ...pathway, start: { ...pathway.start }, end: { ...pathway.end } })),
       viewPoint: { ...scene.room.viewPoint },
       focalPoint: { ...scene.room.focalPoint }
     },
@@ -66,6 +68,93 @@ function randomPoseOnSurface(prop: PropItem, surface: Surface, rng: Rng): PropIt
       y: rng.range(bounds.y, bounds.y + bounds.height)
     }
   };
+}
+
+function slotCoordinates(prop: PropItem, surface: Surface): Array<{ x: number; y: number }> {
+  const bounds = getPlacementBounds(prop, surface);
+  const minX = bounds.x;
+  const maxX = bounds.x + bounds.width;
+  const minY = bounds.y;
+  const maxY = bounds.y + bounds.height;
+  const midX = minX + bounds.width / 2;
+  const midY = minY + bounds.height / 2;
+  const inset = Math.min(34, Math.max(bounds.width, bounds.height) * 0.18);
+
+  const backY = surface.wallEdge === "bottom" ? maxY : minY;
+  const frontY = surface.wallEdge === "bottom" ? minY : maxY;
+  const backX = surface.wallEdge === "right" ? maxX : minX;
+  const frontX = surface.wallEdge === "right" ? minX : maxX;
+
+  switch (prop.preference) {
+    case "backEdge":
+      return surface.wallEdge === "left" || surface.wallEdge === "right"
+        ? [
+            { x: backX, y: minY + inset },
+            { x: backX, y: midY },
+            { x: backX, y: maxY - inset }
+          ]
+        : [
+            { x: minX + inset, y: backY },
+            { x: midX, y: backY },
+            { x: maxX - inset, y: backY }
+          ];
+    case "frontEdge":
+      return surface.wallEdge === "left" || surface.wallEdge === "right"
+        ? [
+            { x: frontX, y: minY + inset },
+            { x: frontX, y: midY },
+            { x: frontX, y: maxY - inset }
+          ]
+        : [
+            { x: minX + inset, y: frontY },
+            { x: midX, y: frontY },
+            { x: maxX - inset, y: frontY }
+          ];
+    case "sideEdge":
+      return [
+        { x: minX, y: midY },
+        { x: maxX, y: midY },
+        { x: minX + inset, y: minY + inset },
+        { x: maxX - inset, y: maxY - inset }
+      ];
+    case "display":
+    case "center":
+      return [
+        { x: midX, y: midY },
+        { x: midX - inset, y: midY },
+        { x: midX + inset, y: midY },
+        { x: midX, y: midY - inset },
+        { x: midX, y: midY + inset }
+      ];
+    default:
+      return [
+        { x: midX, y: midY },
+        { x: minX + inset, y: minY + inset },
+        { x: maxX - inset, y: maxY - inset }
+      ];
+  }
+}
+
+function slotPoseOnSurface(prop: PropItem, surface: Surface, rng: Rng): PropItem {
+  const rotated = {
+    ...prop,
+    pose: {
+      ...prop.pose,
+      surfaceId: surface.id
+    }
+  };
+  const slot = rng.pick(slotCoordinates(rotated, surface));
+  return clampPropToSurface(
+    {
+      ...rotated,
+      pose: {
+        ...rotated.pose,
+        x: slot.x,
+        y: slot.y
+      }
+    },
+    surface
+  );
 }
 
 function rotateProp(prop: PropItem, rng: Rng): PropItem {
@@ -117,7 +206,7 @@ function propose(scene: LayoutScene, rng: Rng, progress: number): LayoutScene {
 
   if (moveType < 0.68) {
     const surface = rng.pick(surfaces);
-    return replaceProp(scene, randomPoseOnSurface(prop, surface, rng));
+    return replaceProp(scene, rng.chance(0.72) ? slotPoseOnSurface(prop, surface, rng) : randomPoseOnSurface(prop, surface, rng));
   }
 
   if (moveType < 0.86) {

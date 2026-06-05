@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runBenchmark, summarizeBenchmark } from "./evaluation";
+import { createBenchmarkReport, runBenchmark, summarizeBenchmark } from "./evaluation";
 import { presets } from "./presets";
 import { scoreScene } from "./scoring";
 
@@ -20,5 +20,14 @@ describe("evaluation", () => {
       expect(Math.min(...results.map((result) => result.optimizedScore))).toBeLessThanOrEqual(baseline.total);
       expect(results.every((result) => result.initialScore === baseline.total)).toBe(true);
     }
+  });
+
+  it("creates an exportable benchmark report", () => {
+    const results = runBenchmark(presets[0], ["report-a", "report-b"], 500);
+    const report = createBenchmarkReport(presets[0], results);
+    expect(report.scenarioId).toBe(presets[0].id);
+    expect(report.seeds).toEqual(["report-a", "report-b"]);
+    expect(report.results).toEqual(results);
+    expect(report.optimizedBestScore).toBeLessThanOrEqual(report.initialScore);
   });
 });

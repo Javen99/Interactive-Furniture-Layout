@@ -7,13 +7,14 @@ type EvaluationPanelProps = {
   summary: BenchmarkSummary | null;
   onToggle: () => void;
   onRun: () => void;
+  onExportReport: () => void;
 };
 
 function topTerm(result: BenchmarkResult) {
   return [...result.termDeltas].sort((a, b) => b.improvement - a.improvement)[0];
 }
 
-export default function EvaluationPanel({ visible, results, summary, onToggle, onRun }: EvaluationPanelProps) {
+export default function EvaluationPanel({ visible, results, summary, onToggle, onRun, onExportReport }: EvaluationPanelProps) {
   return (
     <section className="panel benchmark-panel">
       <button className="panel-toggle" type="button" onClick={onToggle}>
@@ -26,6 +27,10 @@ export default function EvaluationPanel({ visible, results, summary, onToggle, o
           <button type="button" onClick={onRun}>
             <Play size={16} />
             Run scenario seeds
+          </button>
+          <button type="button" onClick={onExportReport} disabled={!results}>
+            <BarChart3 size={16} />
+            Export report
           </button>
           {results && summary ? (
             <>
@@ -53,6 +58,8 @@ export default function EvaluationPanel({ visible, results, summary, onToggle, o
                     </div>
                     <div className="mini-metrics">
                       <span>{result.improvement.toFixed(1)} total</span>
+                      <span>{result.hardCostImprovement.toFixed(1)} hard cost</span>
+                      <span>{result.softCostImprovement.toFixed(1)} soft cost</span>
                       <span>{result.initialHardViolations} to {result.optimizedHardViolations} hard</span>
                       <span>{Math.round(result.acceptanceRate * 100)}% accepted</span>
                     </div>
@@ -72,4 +79,3 @@ export default function EvaluationPanel({ visible, results, summary, onToggle, o
     </section>
   );
 }
-

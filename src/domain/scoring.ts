@@ -10,6 +10,7 @@ import {
   orientedRectAabb,
   orientedRectInsideAxisRect,
   orientedRectsOverlap,
+  orientedRectBlocksPathway,
   pointLineDistance,
   propToOrientedRect,
   rectCenter
@@ -25,7 +26,8 @@ export const defaultWeights: CostWeights = {
   centerEdge: 6,
   alignment: 4,
   balance: 5,
-  visibility: 5
+  visibility: 5,
+  accessibility: 22
 };
 
 const termLabels: Record<ScoreTermKey, string> = {
@@ -37,7 +39,8 @@ const termLabels: Record<ScoreTermKey, string> = {
   centerEdge: "Surface fit",
   alignment: "Alignment",
   balance: "Balance",
-  visibility: "Visibility"
+  visibility: "Visibility",
+  accessibility: "Access"
 };
 
 const termExplanations: Record<ScoreTermKey, string> = {
@@ -49,7 +52,8 @@ const termExplanations: Record<ScoreTermKey, string> = {
   centerEdge: "Each prop prefers a practical zone on its surface.",
   alignment: "Rectangular props prefer clean worktop/wall alignment.",
   balance: "Props should not cluster heavily on one side of a surface.",
-  visibility: "Display props prefer the focal view corridor."
+  visibility: "Display props prefer the focal view corridor.",
+  accessibility: "Approach zones and pathways should stay usable."
 };
 
 const fixtureTargets: Array<{ fixture: Fixture["kind"]; tags: string[]; preferred: number; tolerance: number }> = [
@@ -61,12 +65,13 @@ const hardTermKeys: ScoreTermKey[] = ["containment", "collision", "pinned"];
 
 function makeTerm(key: ScoreTermKey, raw: number, weights: CostWeights): ScoreTerm {
   const roundedRaw = Number(raw.toFixed(4));
+  const weight = weights[key] ?? defaultWeights[key];
   return {
     key,
     label: termLabels[key],
     raw: roundedRaw,
-    weight: weights[key],
-    weighted: Number((roundedRaw * weights[key]).toFixed(2)),
+    weight,
+    weighted: Number((roundedRaw * weight).toFixed(2)),
     explanation: termExplanations[key]
   };
 }
@@ -124,6 +129,7 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
   let alignment = 0;
   let balance = 0;
   let visibility = 0;
+  let accessibility = 0;
   let hardViolations = 0;
 
   const propRects = scene.props.map((prop) => ({ prop, rect: propToOrientedRect(prop), aabb: orientedRectAabb(propToOrientedRect(prop)) }));
@@ -209,6 +215,20 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
     visibility += clamp(pointLineDistance(prop.pose, scene.room.viewPoint, scene.room.focalPoint) / 170, 0, 1);
   }
 
+  for (const { rect } of propRects) {
+    for (const zone of scene.room.accessZones ?? []) {
+      if (orientedRectsOverlap(rect, axisRectToOrientedRect(zone))) {
+        accessibility += zone.importance;
+      }
+    }
+
+    for (const pathway of scene.room.pathways ?? []) {
+      if (orientedRectBlocksPathway(rect, pathway)) {
+        accessibility += pathway.importance;
+      }
+    }
+  }
+
   const terms = [
     makeTerm("containment", containment, scene.weights),
     makeTerm("collision", collision, scene.weights),
@@ -218,7 +238,8 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
     makeTerm("centerEdge", centerEdge, scene.weights),
     makeTerm("alignment", alignment, scene.weights),
     makeTerm("balance", balance, scene.weights),
-    makeTerm("visibility", visibility, scene.weights)
+    makeTerm("visibility", visibility, scene.weights),
+    makeTerm("accessibility", accessibility, scene.weights)
   ];
   const hardCost = terms.filter((term) => hardTermKeys.includes(term.key)).reduce((sum, term) => sum + term.weighted, 0);
   const total = terms.reduce((sum, term) => sum + term.weighted, 0);

@@ -218,6 +218,38 @@ button:disabled {
   fill: white;
 }
 
+.access-zone {
+  fill: rgba(184, 110, 30, 0.14);
+  stroke: rgba(184, 110, 30, 0.5);
+  stroke-width: 2;
+  stroke-dasharray: 7 5;
+}
+
+.access-zone-worktopFront {
+  fill: rgba(31, 138, 132, 0.11);
+  stroke: rgba(31, 138, 132, 0.42);
+}
+
+.access-label {
+  fill: #7d551d;
+  font-size: 12px;
+  font-weight: 750;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.pathway {
+  stroke: rgba(31, 138, 132, 0.12);
+  stroke-linecap: round;
+}
+
+.pathway-center {
+  stroke: rgba(31, 138, 132, 0.45);
+  stroke-width: 3;
+  stroke-dasharray: 10 8;
+  stroke-linecap: round;
+}
+
 .view-line {
   stroke: rgba(31, 138, 132, 0.4);
   stroke-width: 3;
@@ -278,6 +310,7 @@ button:disabled {
 .suggestions,
 .scenario-gallery,
 .cause-list,
+.review-pair,
 .benchmark-body {
   display: flex;
   flex-direction: column;
@@ -510,6 +543,34 @@ button:disabled {
   margin: 12px 0 0;
 }
 
+.run-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(31, 138, 132, 0.26);
+  background: rgba(31, 138, 132, 0.08);
+  border-radius: 8px;
+  padding: 8px;
+  margin-top: 10px;
+  color: var(--accent-dark);
+  font-size: 0.82rem;
+}
+
+.run-state span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(31, 138, 132, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .dominant-terms span {
   padding: 5px 8px;
   background: #eef6f5;
@@ -676,6 +737,68 @@ button:disabled {
 .cause-row small {
   color: var(--muted);
   text-align: right;
+}
+
+.review-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  padding: 8px;
+  gap: 7px;
+}
+
+.review-card > span {
+  align-self: flex-start;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+.mini-layout {
+  width: 100%;
+  aspect-ratio: 1.35;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f2eee7;
+}
+
+.mini-floor {
+  fill: #f2eee7;
+}
+
+.mini-surface {
+  fill: #d3d8dc;
+  stroke: #9ca8b2;
+  stroke-width: 2;
+}
+
+.mini-fixture {
+  fill: #a6d6e8;
+  stroke: rgba(32, 41, 51, 0.32);
+  stroke-width: 2;
+}
+
+.mini-fixture-hob {
+  fill: #434a54;
+}
+
+.mini-fixture-door {
+  fill: #d9c49a;
+}
+
+.mini-fixture-window {
+  fill: #8dc9e8;
+}
+
+.mini-prop {
+  stroke: rgba(26, 31, 37, 0.45);
+  stroke-width: 2;
 }
 
 .json-panel textarea {

@@ -32,6 +32,23 @@ export type Fixture = AxisAlignedRect & {
   clearance: number;
 };
 
+export type AccessZoneKind = "fixture" | "worktopFront" | "doorApproach" | "pathway";
+
+export type AccessZone = AxisAlignedRect & {
+  kind: AccessZoneKind;
+  targetId?: string;
+  importance: number;
+};
+
+export type Pathway = {
+  id: string;
+  label: string;
+  start: Vec2;
+  end: Vec2;
+  width: number;
+  importance: number;
+};
+
 export type PlacementPreference = "center" | "backEdge" | "frontEdge" | "sideEdge" | "display" | "none";
 
 export type PropItem = {
@@ -54,6 +71,8 @@ export type RoomPlan = {
   walls: AxisAlignedRect[];
   surfaces: Surface[];
   fixtures: Fixture[];
+  accessZones?: AccessZone[];
+  pathways?: Pathway[];
   viewPoint: Vec2;
   focalPoint: Vec2;
 };
@@ -68,6 +87,7 @@ export type CostWeights = {
   alignment: number;
   balance: number;
   visibility: number;
+  accessibility: number;
 };
 
 export type LayoutScene = {
@@ -173,4 +193,18 @@ export type BenchmarkSummary = {
   mean: number;
   standardDeviation: number;
   successRate: number;
+};
+
+export type BenchmarkReport = {
+  generatedAt: string;
+  scenarioId: string;
+  scenarioName: string;
+  seeds: string[];
+  initialScore: number;
+  optimizedBestScore: number;
+  initialHardViolations: number;
+  optimizedBestHardViolations: number;
+  summary: BenchmarkSummary;
+  results: BenchmarkResult[];
+  selectedSuggestionIds: string[];
 };
