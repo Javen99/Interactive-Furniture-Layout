@@ -1,4 +1,4 @@
-import { BarChart3, Play, TestTube2 } from "lucide-react";
+import { BarChart3, Play, Repeat2, TestTube2 } from "lucide-react";
 import type { BenchmarkResult, BenchmarkSummary } from "../domain/types";
 
 type EvaluationPanelProps = {
@@ -7,6 +7,7 @@ type EvaluationPanelProps = {
   summary: BenchmarkSummary | null;
   onToggle: () => void;
   onRun: () => void;
+  onReplaySeeds: () => void;
   onExportReport: () => void;
 };
 
@@ -14,7 +15,7 @@ function topTerm(result: BenchmarkResult) {
   return [...result.termDeltas].sort((a, b) => b.improvement - a.improvement)[0];
 }
 
-export default function EvaluationPanel({ visible, results, summary, onToggle, onRun, onExportReport }: EvaluationPanelProps) {
+export default function EvaluationPanel({ visible, results, summary, onToggle, onRun, onReplaySeeds, onExportReport }: EvaluationPanelProps) {
   return (
     <section className="panel benchmark-panel">
       <button className="panel-toggle" type="button" onClick={onToggle}>
@@ -27,6 +28,10 @@ export default function EvaluationPanel({ visible, results, summary, onToggle, o
           <button type="button" onClick={onRun}>
             <Play size={16} />
             Run scenario seeds
+          </button>
+          <button type="button" onClick={onReplaySeeds}>
+            <Repeat2 size={16} />
+            Replay seeds
           </button>
           <button type="button" onClick={onExportReport} disabled={!results}>
             <BarChart3 size={16} />

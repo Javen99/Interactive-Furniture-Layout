@@ -104,6 +104,24 @@ export type LayoutScene = {
   weights: CostWeights;
 };
 
+export type CostProfile = {
+  id: "balanced" | "accessibility-first" | "display-first" | "custom";
+  label: string;
+  description: string;
+  weights: CostWeights;
+};
+
+export type EditablePrimitiveKind = "surface" | "fixture" | "accessZone" | "pathway";
+
+export type EditableSelection =
+  | { kind: "prop"; id: string }
+  | { kind: "surface"; id: string }
+  | { kind: "fixture"; id: string }
+  | { kind: "accessZone"; id: string }
+  | { kind: "pathway"; id: string }
+  | { kind: "pathwayStart"; id: string }
+  | { kind: "pathwayEnd"; id: string };
+
 export type ScoreTermKey = keyof CostWeights;
 
 export type ScoreTerm = {
@@ -207,4 +225,31 @@ export type BenchmarkReport = {
   summary: BenchmarkSummary;
   results: BenchmarkResult[];
   selectedSuggestionIds: string[];
+};
+
+export type StudyVote = {
+  id: string;
+  createdAt: string;
+  scenarioId: string;
+  scenarioName: string;
+  comparedSuggestionIds: [string, string];
+  selectedSuggestionId: string;
+  selectedLabel: "A" | "B";
+  seedMetadata: string[];
+  scoreDelta: {
+    selectedTotal: number;
+    otherTotal: number;
+    totalDifference: number;
+    selectedHardViolations: number;
+    otherHardViolations: number;
+  };
+};
+
+export type StudyReport = {
+  generatedAt: string;
+  scenarioId: string;
+  scenarioName: string;
+  seedMetadata: string[];
+  voteCount: number;
+  votes: StudyVote[];
 };

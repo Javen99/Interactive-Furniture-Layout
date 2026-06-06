@@ -1,6 +1,6 @@
 import { generateSuggestionsWithDiagnostics } from "./optimizer";
 import { scoreScene } from "./scoring";
-import type { BenchmarkReport, BenchmarkResult, BenchmarkSummary, LayoutScene, Suggestion } from "./types";
+import type { BenchmarkReport, BenchmarkResult, BenchmarkSummary, LayoutScene, StudyReport, StudyVote, Suggestion } from "./types";
 
 export function runBenchmark(scene: LayoutScene, seeds: string[], iterations = 2200): BenchmarkResult[] {
   const initial = scoreScene(scene);
@@ -69,5 +69,67 @@ export function createBenchmarkReport(scene: LayoutScene, results: BenchmarkResu
     summary,
     results,
     selectedSuggestionIds: suggestions.map((suggestion) => suggestion.id)
+  };
+}
+
+export function replayBenchmarkSuggestions(scene: LayoutScene, seeds: string[], iterations = 2200, suggestionCount = 5): Suggestion[] {
+  return seeds
+    .flatMap((seed) => {
+      const run = generateSuggestionsWithDiagnostics(scene, {
+        seed,
+        iterations,
+        suggestionCount: 1,
+        startTemperature: 18,
+        endTemperature: 0.1
+      });
+      return run.suggestions;
+    })
+    .sort((a, b) => {
+      if (a.score.hardViolations !== b.score.hardViolations) {
+        return a.score.hardViolations - b.score.hardViolations;
+      }
+      return a.score.total - b.score.total;
+    })
+    .slice(0, suggestionCount)
+    .map((suggestion, index) => ({ ...suggestion, rank: index + 1 }));
+}
+
+export function createStudyVote(
+  scene: LayoutScene,
+  pair: [Suggestion, Suggestion],
+  selectedSuggestionId: string,
+  createdAt = new Date().toISOString()
+): StudyVote {
+  const selectedIndex = pair[0].id === selectedSuggestionId ? 0 : 1;
+  const selected = pair[selectedIndex];
+  const other = pair[selectedIndex === 0 ? 1 : 0];
+
+  return {
+    id: `${scene.id}-${createdAt}-${selected.id}`,
+    createdAt,
+    scenarioId: scene.id,
+    scenarioName: scene.name,
+    comparedSuggestionIds: [pair[0].id, pair[1].id],
+    selectedSuggestionId: selected.id,
+    selectedLabel: selectedIndex === 0 ? "A" : "B",
+    seedMetadata: scene.metadata?.evaluationSeeds ?? [],
+    scoreDelta: {
+      selectedTotal: selected.score.total,
+      otherTotal: other.score.total,
+      totalDifference: Number((selected.score.total - other.score.total).toFixed(2)),
+      selectedHardViolations: selected.score.hardViolations,
+      otherHardViolations: other.score.hardViolations
+    }
+  };
+}
+
+export function createStudyReport(scene: LayoutScene, votes: StudyVote[], generatedAt = new Date().toISOString()): StudyReport {
+  return {
+    generatedAt,
+    scenarioId: scene.id,
+    scenarioName: scene.name,
+    seedMetadata: scene.metadata?.evaluationSeeds ?? [],
+    voteCount: votes.length,
+    votes
   };
 }

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ClipboardCheck } from "lucide-react";
+import AuthoringPanel from "./components/AuthoringPanel";
+import CostProfilePanel from "./components/CostProfilePanel";
 import DiagnosticsPanel from "./components/DiagnosticsPanel";
 import EvaluationPanel from "./components/EvaluationPanel";
 import ReviewPanel from "./components/ReviewPanel";
@@ -8,13 +10,22 @@ import ScorePanel from "./components/ScorePanel";
 import ObjectPalette from "./components/ObjectPalette";
 import OptimizerPanel from "./components/OptimizerPanel";
 import JsonPanel from "./components/JsonPanel";
+import { addPrimitive, deletePrimitive, movePrimitiveTo, updatePrimitive, type PrimitivePatch } from "./domain/authoring";
+import { applyCostProfile, updateSceneWeight } from "./domain/costProfiles";
 import { clampPropToSurface, findSurfaceForProp, normalizeDegrees } from "./domain/geometry";
-import { createBenchmarkReport, runBenchmark, summarizeBenchmark } from "./domain/evaluation";
+import {
+  createBenchmarkReport,
+  createStudyReport,
+  createStudyVote,
+  replayBenchmarkSuggestions,
+  runBenchmark,
+  summarizeBenchmark
+} from "./domain/evaluation";
 import { cloneScene, generateSuggestionsWithDiagnostics, normalizeScene } from "./domain/optimizer";
 import { presets } from "./domain/presets";
 import { scoreScene } from "./domain/scoring";
 import { exportScene, importScene } from "./domain/serialization";
-import type { LayoutScene, OptimizerDiagnostics, Suggestion } from "./domain/types";
+import type { CostProfile, EditablePrimitiveKind, EditableSelection, LayoutScene, OptimizerDiagnostics, StudyVote, Suggestion, Vec2 } from "./domain/types";
 
 type BenchmarkState = {
   results: ReturnType<typeof runBenchmark>;
@@ -40,7 +51,8 @@ export default function App() {
   const [presetId, setPresetId] = useState(presets[0].id);
   const [scene, setScene] = useState<LayoutScene>(() => cloneScene(presets[0]));
   const [baseline, setBaseline] = useState<LayoutScene>(() => cloneScene(presets[0]));
-  const [selectedId, setSelectedId] = useState<string | null>(scene.props[0]?.id ?? null);
+  const [selection, setSelection] = useState<EditableSelection | null>(() => (presets[0].props[0] ? { kind: "prop", id: presets[0].props[0].id } : null));
+  const [costProfileId, setCostProfileId] = useState<CostProfile["id"]>("balanced");
   const [seed, setSeed] = useState("layout-lab");
   const [iterations, setIterations] = useState(3500);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -50,8 +62,19 @@ export default function App() {
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [benchVisible, setBenchVisible] = useState(false);
   const [benchmark, setBenchmark] = useState<BenchmarkState | null>(null);
+  const [studyVotes, setStudyVotes] = useState<StudyVote[]>([]);
 
   const score = useMemo(() => scoreScene(scene, baseline), [scene, baseline]);
+  const selectedPropId = selection?.kind === "prop" ? selection.id : null;
+
+  const clearGeneratedState = (clearSuggestions = true) => {
+    if (clearSuggestions) {
+      setSuggestions([]);
+    }
+    setDiagnostics(null);
+    setBenchmark(null);
+    setStudyVotes([]);
+  };
 
   const loadPreset = (id: string) => {
     const preset = presets.find((candidate) => candidate.id === id) ?? presets[0];
@@ -59,12 +82,14 @@ export default function App() {
     setPresetId(id);
     setScene(next);
     setBaseline(cloneScene(next));
-    setSelectedId(next.props[0]?.id ?? null);
+    setSelection(next.props[0] ? { kind: "prop", id: next.props[0].id } : null);
+    setCostProfileId("balanced");
     setSuggestions([]);
     setDiagnostics(null);
     setJson(exportScene(next));
     setJsonError(null);
     setBenchmark(null);
+    setStudyVotes([]);
   };
 
   const moveProp = (id: string, x: number, y: number) => {
@@ -79,6 +104,7 @@ export default function App() {
     );
     setBenchmark(null);
     setDiagnostics(null);
+    setStudyVotes([]);
   };
 
   const rotateProp = (id: string) => {
@@ -94,6 +120,7 @@ export default function App() {
     );
     setBenchmark(null);
     setDiagnostics(null);
+    setStudyVotes([]);
   };
 
   const togglePin = (id: string) => {
@@ -112,6 +139,7 @@ export default function App() {
     );
     setBenchmark(null);
     setDiagnostics(null);
+    setStudyVotes([]);
   };
 
   const runOptimizer = () => {
@@ -131,6 +159,7 @@ export default function App() {
         });
         setSuggestions(run.suggestions);
         setDiagnostics(run.diagnostics);
+        setStudyVotes([]);
       } finally {
         setIsOptimizing(false);
       }
@@ -146,7 +175,7 @@ export default function App() {
 
   const applySuggestion = (suggestion: Suggestion) => {
     setScene(cloneScene(suggestion.scene));
-    setSelectedId(suggestion.scene.props[0]?.id ?? null);
+    setSelection(suggestion.scene.props[0] ? { kind: "prop", id: suggestion.scene.props[0].id } : null);
     setBenchmark(null);
     setDiagnostics(null);
   };
@@ -154,10 +183,12 @@ export default function App() {
   const resetScene = () => {
     const reset = cloneScene(baseline);
     setScene(reset);
+    setSelection(reset.props[0] ? { kind: "prop", id: reset.props[0].id } : null);
     setSuggestions([]);
     setDiagnostics(null);
     setJson(exportScene(reset));
     setBenchmark(null);
+    setStudyVotes([]);
   };
 
   const resetScenario = () => {
@@ -176,11 +207,13 @@ export default function App() {
       const imported = normalizeScene(importScene(json));
       setScene(imported);
       setBaseline(cloneScene(imported));
-      setSelectedId(imported.props[0]?.id ?? null);
+      setSelection(imported.props[0] ? { kind: "prop", id: imported.props[0].id } : null);
+      setCostProfileId("custom");
       setSuggestions([]);
       setDiagnostics(null);
       setJsonError(null);
       setBenchmark(null);
+      setStudyVotes([]);
     } catch (error) {
       setJsonError(error instanceof Error ? error.message : "Invalid scene JSON.");
     }
@@ -192,11 +225,74 @@ export default function App() {
     setBenchVisible(true);
   };
 
+  const replayEvaluationSeeds = () => {
+    const seeds = scene.metadata?.evaluationSeeds ?? ["alpha", "bravo", "charlie"];
+    const cappedIterations = Math.min(iterations, 2600);
+    const results = runBenchmark(scene, seeds, cappedIterations);
+    setBenchmark({ results, summary: summarizeBenchmark(results) });
+    setSuggestions(replayBenchmarkSuggestions(scene, seeds, cappedIterations, 5));
+    setDiagnostics(null);
+    setStudyVotes([]);
+    setBenchVisible(true);
+  };
+
   const exportBenchmarkReport = () => {
     if (!benchmark) {
       return;
     }
     const exported = JSON.stringify(createBenchmarkReport(scene, benchmark.results, suggestions), null, 2);
+    setJson(exported);
+    setJsonError(null);
+    navigator.clipboard?.writeText(exported).catch(() => undefined);
+  };
+
+  const addAuthoringPrimitive = (kind: EditablePrimitiveKind) => {
+    setScene((current) => {
+      const result = addPrimitive(current, kind);
+      setSelection(result.selection);
+      return result.scene;
+    });
+    clearGeneratedState();
+  };
+
+  const updateAuthoringSelection = (patch: PrimitivePatch) => {
+    setScene((current) => updatePrimitive(current, selection, patch));
+    clearGeneratedState();
+  };
+
+  const deleteAuthoringSelection = () => {
+    setScene((current) => deletePrimitive(current, selection));
+    setSelection(null);
+    clearGeneratedState();
+  };
+
+  const moveAuthoringPrimitive = (target: EditableSelection, point: Vec2) => {
+    setScene((current) => movePrimitiveTo(current, target, point));
+    setBenchmark(null);
+    setDiagnostics(null);
+    setStudyVotes([]);
+  };
+
+  const changeCostProfile = (profileId: CostProfile["id"]) => {
+    setCostProfileId(profileId);
+    if (profileId !== "custom") {
+      setScene((current) => applyCostProfile(current, profileId));
+    }
+    clearGeneratedState();
+  };
+
+  const changeCostWeight = (key: keyof LayoutScene["weights"], value: number) => {
+    setCostProfileId("custom");
+    setScene((current) => updateSceneWeight(current, key, value));
+    clearGeneratedState();
+  };
+
+  const recordStudyVote = (suggestion: Suggestion, pair: [Suggestion, Suggestion]) => {
+    setStudyVotes((current) => [...current, createStudyVote(scene, pair, suggestion.id)]);
+  };
+
+  const exportStudyReport = () => {
+    const exported = JSON.stringify(createStudyReport(scene, studyVotes), null, 2);
     setJson(exported);
     setJsonError(null);
     navigator.clipboard?.writeText(exported).catch(() => undefined);
@@ -242,7 +338,21 @@ export default function App() {
             Reset scenario
           </button>
         </section>
-        <ObjectPalette scene={scene} selectedId={selectedId} onSelect={setSelectedId} onRotate={rotateProp} onTogglePin={togglePin} />
+        <ObjectPalette
+          scene={scene}
+          selectedId={selectedPropId}
+          onSelect={(id) => setSelection({ kind: "prop", id })}
+          onRotate={rotateProp}
+          onTogglePin={togglePin}
+        />
+        <AuthoringPanel
+          scene={scene}
+          selection={selection}
+          onSelect={setSelection}
+          onAddPrimitive={addAuthoringPrimitive}
+          onUpdateSelection={updateAuthoringSelection}
+          onDeleteSelection={deleteAuthoringSelection}
+        />
         <OptimizerPanel
           seed={seed}
           iterations={iterations}
@@ -257,19 +367,28 @@ export default function App() {
           onReset={resetScene}
         />
       </aside>
-      <LayoutCanvas scene={scene} selectedId={selectedId} onSelect={setSelectedId} onMoveProp={moveProp} />
+      <LayoutCanvas scene={scene} selection={selection} onSelect={setSelection} onMoveProp={moveProp} onMovePrimitive={moveAuthoringPrimitive} />
       <aside className="sidebar right-sidebar">
         <ScorePanel score={score} />
+        <CostProfilePanel profileId={costProfileId} weights={scene.weights} onProfileChange={changeCostProfile} onWeightChange={changeCostWeight} />
         <EvaluationPanel
           visible={benchVisible}
           results={benchmark?.results ?? null}
           summary={benchmark?.summary ?? null}
           onToggle={() => setBenchVisible((visible) => !visible)}
           onRun={runEvaluation}
+          onReplaySeeds={replayEvaluationSeeds}
           onExportReport={exportBenchmarkReport}
         />
         <DiagnosticsPanel diagnostics={diagnostics} />
-        <ReviewPanel suggestions={suggestions} currentScene={scene} onApplySuggestion={applySuggestion} />
+        <ReviewPanel
+          suggestions={suggestions}
+          currentScene={scene}
+          votes={studyVotes}
+          onVote={recordStudyVote}
+          onExportReport={exportStudyReport}
+          onApplySuggestion={applySuggestion}
+        />
         <JsonPanel json={json} error={jsonError} onJsonChange={setJson} onExport={exportCurrentScene} onImport={importCurrentScene} />
         <section className="panel research-note">
           <div className="panel-title">

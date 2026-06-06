@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyCostProfile } from "./costProfiles";
 import { cloneScene } from "./optimizer";
 import { galleyKitchen } from "./presets";
 import { scoreScene } from "./scoring";
@@ -38,5 +39,14 @@ describe("scoring", () => {
     const clearAccess = scoreScene(clear).terms.find((term) => term.key === "accessibility")!.weighted;
     const blockedAccess = scoreScene(blocked).terms.find((term) => term.key === "accessibility")!.weighted;
     expect(blockedAccess).toBeGreaterThan(clearAccess);
+  });
+
+  it("reweights cost profiles without changing raw term facts", () => {
+    const balanced = scoreScene(applyCostProfile(cloneScene(galleyKitchen), "balanced"));
+    const accessibilityFirst = scoreScene(applyCostProfile(cloneScene(galleyKitchen), "accessibility-first"));
+    const balancedAccess = balanced.terms.find((term) => term.key === "accessibility")!;
+    const accessibilityFirstAccess = accessibilityFirst.terms.find((term) => term.key === "accessibility")!;
+    expect(accessibilityFirstAccess.raw).toBe(balancedAccess.raw);
+    expect(accessibilityFirstAccess.weighted).toBeGreaterThanOrEqual(balancedAccess.weighted);
   });
 });

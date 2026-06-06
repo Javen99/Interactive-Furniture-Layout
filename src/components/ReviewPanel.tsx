@@ -1,9 +1,12 @@
-import { EyeOff, Shuffle } from "lucide-react";
-import type { LayoutScene, Suggestion } from "../domain/types";
+import { Check, Download, EyeOff, Shuffle } from "lucide-react";
+import type { LayoutScene, StudyVote, Suggestion } from "../domain/types";
 
 type ReviewPanelProps = {
   suggestions: Suggestion[];
   currentScene: LayoutScene;
+  votes: StudyVote[];
+  onVote: (suggestion: Suggestion, pair: [Suggestion, Suggestion]) => void;
+  onExportReport: () => void;
   onApplySuggestion: (suggestion: Suggestion) => void;
 };
 
@@ -34,8 +37,8 @@ function MiniLayout({ scene }: { scene: LayoutScene }) {
   );
 }
 
-export default function ReviewPanel({ suggestions, currentScene, onApplySuggestion }: ReviewPanelProps) {
-  const pair = suggestions.slice(0, 2);
+export default function ReviewPanel({ suggestions, currentScene, votes, onVote, onExportReport, onApplySuggestion }: ReviewPanelProps) {
+  const pair = suggestions.slice(0, 2) as [Suggestion, Suggestion] | Suggestion[];
 
   return (
     <section className="panel review-panel">
@@ -49,16 +52,29 @@ export default function ReviewPanel({ suggestions, currentScene, onApplySuggesti
         <>
           <div className="review-pair">
             {pair.map((suggestion, index) => (
-              <button className="review-card" type="button" key={suggestion.id} onClick={() => onApplySuggestion(suggestion)}>
+              <div className="review-card" key={suggestion.id}>
                 <span>{index === 0 ? "A" : "B"}</span>
                 <MiniLayout scene={suggestion.scene} />
-              </button>
+                <div className="review-actions">
+                  <button type="button" onClick={() => onVote(suggestion, pair as [Suggestion, Suggestion])}>
+                    <Check size={15} />
+                    Prefer
+                  </button>
+                  <button type="button" onClick={() => onApplySuggestion(suggestion)}>
+                    Apply
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
           <div className="diagnostic-note">
             <Shuffle size={14} />
-            <span>Scores are hidden here; use it as a quick preference check against the current scene.</span>
+            <span>Scores are hidden here; {votes.length} preference votes recorded for export.</span>
           </div>
+          <button type="button" onClick={onExportReport} disabled={votes.length === 0}>
+            <Download size={15} />
+            Export study
+          </button>
           <MiniLayout scene={currentScene} />
         </>
       )}

@@ -1,14 +1,16 @@
 import type { PointerEvent } from "react";
 import { useRef, useState } from "react";
-import { Lock, Move, Unlock } from "lucide-react";
+import { Lock, Move, PencilRuler, Unlock } from "lucide-react";
+import { getSelectionLabel } from "../domain/authoring";
 import { axisRectToOrientedRect, orientedRectCorners } from "../domain/geometry";
-import type { Fixture, LayoutScene, PropItem } from "../domain/types";
+import type { EditableSelection, Fixture, LayoutScene, PropItem, Vec2 } from "../domain/types";
 
 type LayoutCanvasProps = {
   scene: LayoutScene;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selection: EditableSelection | null;
+  onSelect: (selection: EditableSelection | null) => void;
   onMoveProp: (id: string, x: number, y: number) => void;
+  onMovePrimitive: (selection: EditableSelection, point: Vec2) => void;
 };
 
 function getFixtureFill(fixture: Fixture): string {
@@ -44,9 +46,9 @@ function pointsForFixture(fixture: Fixture): string {
     .join(" ");
 }
 
-export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }: LayoutCanvasProps) {
+export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, onMovePrimitive }: LayoutCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragSelection, setDragSelection] = useState<EditableSelection | null>(null);
 
   const toSvgPoint = (event: PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -61,14 +63,28 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
   };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
-    if (!dragId) {
+    if (!dragSelection) {
       return;
     }
     const point = toSvgPoint(event);
-    onMoveProp(dragId, point.x, point.y);
+    if (dragSelection.kind === "prop") {
+      onMoveProp(dragSelection.id, point.x, point.y);
+    } else {
+      onMovePrimitive(dragSelection, point);
+    }
   };
 
-  const selectedProp = scene.props.find((prop) => prop.id === selectedId);
+  const selectedProp = selection?.kind === "prop" ? scene.props.find((prop) => prop.id === selection.id) : undefined;
+  const selectedLabel = getSelectionLabel(scene, selection);
+
+  const selectAndDrag = (event: PointerEvent<SVGElement>, nextSelection: EditableSelection, draggable = true) => {
+    event.stopPropagation();
+    onSelect(nextSelection);
+    if (draggable) {
+      setDragSelection(nextSelection);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  };
 
   return (
     <section className="canvas-panel" aria-label="Layout editor">
@@ -78,8 +94,8 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
           <p>{scene.description}</p>
         </div>
         <div className="selected-chip">
-          {selectedProp?.pinned ? <Lock size={16} /> : selectedProp ? <Unlock size={16} /> : <Move size={16} />}
-          <span>{selectedProp ? selectedProp.label : "No selection"}</span>
+          {selectedProp?.pinned ? <Lock size={16} /> : selectedProp ? <Unlock size={16} /> : selection ? <PencilRuler size={16} /> : <Move size={16} />}
+          <span>{selectedLabel}</span>
         </div>
       </div>
       <svg
@@ -89,8 +105,8 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
         role="img"
         aria-label="Top-down kitchen worktop layout"
         onPointerMove={handlePointerMove}
-        onPointerUp={() => setDragId(null)}
-        onPointerLeave={() => setDragId(null)}
+        onPointerUp={() => setDragSelection(null)}
+        onPointerLeave={() => setDragSelection(null)}
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) {
             onSelect(null);
@@ -102,7 +118,11 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
           <rect key={wall.id} className="wall" x={wall.x} y={wall.y} width={wall.width} height={wall.height} rx="2" />
         ))}
         {scene.room.surfaces.map((surface) => (
-          <g key={surface.id}>
+          <g
+            key={surface.id}
+            className={selection?.kind === "surface" && selection.id === surface.id ? "primitive-group selected" : "primitive-group"}
+            onPointerDown={(event) => selectAndDrag(event, { kind: "surface", id: surface.id })}
+          >
             <rect
               className="surface"
               x={surface.x}
@@ -117,7 +137,11 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
           </g>
         ))}
         {(scene.room.accessZones ?? []).map((zone) => (
-          <g key={zone.id}>
+          <g
+            key={zone.id}
+            className={selection?.kind === "accessZone" && selection.id === zone.id ? "primitive-group selected" : "primitive-group"}
+            onPointerDown={(event) => selectAndDrag(event, { kind: "accessZone", id: zone.id })}
+          >
             <rect className={`access-zone access-zone-${zone.kind}`} x={zone.x} y={zone.y} width={zone.width} height={zone.height} rx="5" />
             <text className="access-label" x={zone.x + zone.width / 2} y={zone.y + zone.height / 2 + 4}>
               {zone.label}
@@ -125,7 +149,11 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
           </g>
         ))}
         {(scene.room.pathways ?? []).map((pathway) => (
-          <g key={pathway.id}>
+          <g
+            key={pathway.id}
+            className={selection?.id === pathway.id && selection.kind.startsWith("pathway") ? "primitive-group selected" : "primitive-group"}
+            onPointerDown={(event) => selectAndDrag(event, { kind: "pathway", id: pathway.id })}
+          >
             <line
               className="pathway"
               x1={pathway.start.x}
@@ -135,13 +163,31 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
               strokeWidth={pathway.width}
             />
             <line className="pathway-center" x1={pathway.start.x} y1={pathway.start.y} x2={pathway.end.x} y2={pathway.end.y} />
+            <circle
+              className={selection?.kind === "pathwayStart" && selection.id === pathway.id ? "pathway-handle selected" : "pathway-handle"}
+              cx={pathway.start.x}
+              cy={pathway.start.y}
+              r="10"
+              onPointerDown={(event) => selectAndDrag(event, { kind: "pathwayStart", id: pathway.id })}
+            />
+            <circle
+              className={selection?.kind === "pathwayEnd" && selection.id === pathway.id ? "pathway-handle selected" : "pathway-handle"}
+              cx={pathway.end.x}
+              cy={pathway.end.y}
+              r="10"
+              onPointerDown={(event) => selectAndDrag(event, { kind: "pathwayEnd", id: pathway.id })}
+            />
           </g>
         ))}
         <line className="view-line" x1={scene.room.viewPoint.x} y1={scene.room.viewPoint.y} x2={scene.room.focalPoint.x} y2={scene.room.focalPoint.y} />
         <circle className="view-point" cx={scene.room.viewPoint.x} cy={scene.room.viewPoint.y} r="7" />
         <circle className="focal-point" cx={scene.room.focalPoint.x} cy={scene.room.focalPoint.y} r="6" />
         {scene.room.fixtures.map((fixture) => (
-          <g key={fixture.id}>
+          <g
+            key={fixture.id}
+            className={selection?.kind === "fixture" && selection.id === fixture.id ? "primitive-group selected" : "primitive-group"}
+            onPointerDown={(event) => selectAndDrag(event, { kind: "fixture", id: fixture.id })}
+          >
             <polygon className={`fixture fixture-${fixture.kind}`} points={pointsForFixture(fixture)} fill={getFixtureFill(fixture)} />
             <text className={`fixture-label ${fixture.kind === "hob" ? "fixture-label-dark" : ""}`} x={fixture.x + fixture.width / 2} y={fixture.y + fixture.height / 2 + 4}>
               {fixture.label}
@@ -149,18 +195,13 @@ export default function LayoutCanvas({ scene, selectedId, onSelect, onMoveProp }
           </g>
         ))}
         {scene.props.map((prop) => {
-          const selected = prop.id === selectedId;
+          const selected = selection?.kind === "prop" && prop.id === selection.id;
           return (
             <g
               key={prop.id}
               className={`prop-group ${selected ? "selected" : ""} ${prop.pinned ? "pinned" : ""}`}
               onPointerDown={(event) => {
-                event.stopPropagation();
-                onSelect(prop.id);
-                if (!prop.pinned) {
-                  setDragId(prop.id);
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                }
+                selectAndDrag(event, { kind: "prop", id: prop.id }, !prop.pinned);
               }}
             >
               <polygon className="prop-shape" points={pointsForProp(prop)} fill={prop.color} />
