@@ -7,6 +7,8 @@ type OptimizerPanelProps = {
   suggestions: Suggestion[];
   diagnostics: OptimizerDiagnostics | null;
   isRunning: boolean;
+  canRun: boolean;
+  disabledReason: string | null;
   onSeedChange: (seed: string) => void;
   onIterationsChange: (iterations: number) => void;
   onRun: () => void;
@@ -21,6 +23,8 @@ export default function OptimizerPanel({
   suggestions,
   diagnostics,
   isRunning,
+  canRun,
+  disabledReason,
   onSeedChange,
   onIterationsChange,
   onRun,
@@ -51,7 +55,7 @@ export default function OptimizerPanel({
         <strong>{iterations}</strong>
       </label>
       <div className="button-row">
-        <button className="primary" type="button" onClick={onRun} disabled={isRunning}>
+        <button className="primary" type="button" onClick={onRun} disabled={isRunning || !canRun}>
           <Play size={17} />
           {isRunning ? "Running" : "Run"}
         </button>
@@ -70,6 +74,7 @@ export default function OptimizerPanel({
           <strong>Searching seeded layout alternatives</strong>
         </div>
       ) : null}
+      {!canRun && disabledReason ? <p className="json-error">{disabledReason}</p> : null}
       <div className="suggestions">
         <div className="suggestions-title">
           <SlidersHorizontal size={16} />

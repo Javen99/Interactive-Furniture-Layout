@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ClipboardCheck } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Redo2, Undo2 } from "lucide-react";
 import AuthoringPanel from "./components/AuthoringPanel";
 import CostProfilePanel from "./components/CostProfilePanel";
 import DiagnosticsPanel from "./components/DiagnosticsPanel";
@@ -10,8 +10,10 @@ import ScorePanel from "./components/ScorePanel";
 import ObjectPalette from "./components/ObjectPalette";
 import OptimizerPanel from "./components/OptimizerPanel";
 import JsonPanel from "./components/JsonPanel";
+import ValidationPanel from "./components/ValidationPanel";
 import { addPrimitive, deletePrimitive, movePrimitiveTo, updatePrimitive, type PrimitivePatch } from "./domain/authoring";
 import { applyCostProfile, updateSceneWeight } from "./domain/costProfiles";
+import { createJsonDownload, downloadJsonFile } from "./domain/downloads";
 import { clampPropToSurface, findSurfaceForProp, normalizeDegrees } from "./domain/geometry";
 import {
   createBenchmarkReport,
@@ -24,7 +26,9 @@ import {
 import { cloneScene, generateSuggestionsWithDiagnostics, normalizeScene } from "./domain/optimizer";
 import { presets } from "./domain/presets";
 import { scoreScene } from "./domain/scoring";
+import { createSceneHistory, pushSceneHistory, redoSceneHistory, undoSceneHistory } from "./domain/sceneHistory";
 import { exportScene, importScene } from "./domain/serialization";
+import { canRunOptimization, validateScene } from "./domain/validation";
 import type { CostProfile, EditablePrimitiveKind, EditableSelection, LayoutScene, OptimizerDiagnostics, StudyVote, Suggestion, Vec2 } from "./domain/types";
 
 type BenchmarkState = {
@@ -50,6 +54,7 @@ function nextOrientation(prop: LayoutScene["props"][number]): number {
 export default function App() {
   const [presetId, setPresetId] = useState(presets[0].id);
   const [scene, setScene] = useState<LayoutScene>(() => cloneScene(presets[0]));
+  const [sceneHistory, setSceneHistory] = useState(() => createSceneHistory(presets[0]));
   const [baseline, setBaseline] = useState<LayoutScene>(() => cloneScene(presets[0]));
   const [selection, setSelection] = useState<EditableSelection | null>(() => (presets[0].props[0] ? { kind: "prop", id: presets[0].props[0].id } : null));
   const [costProfileId, setCostProfileId] = useState<CostProfile["id"]>("balanced");
@@ -65,6 +70,8 @@ export default function App() {
   const [studyVotes, setStudyVotes] = useState<StudyVote[]>([]);
 
   const score = useMemo(() => scoreScene(scene, baseline), [scene, baseline]);
+  const validationReport = useMemo(() => validateScene(scene), [scene]);
+  const canRun = canRunOptimization(validationReport);
   const selectedPropId = selection?.kind === "prop" ? selection.id : null;
 
   const clearGeneratedState = (clearSuggestions = true) => {
@@ -76,11 +83,28 @@ export default function App() {
     setStudyVotes([]);
   };
 
+  const rememberScene = (next: LayoutScene) => {
+    setSceneHistory((current) => pushSceneHistory(current, next));
+  };
+
+  const setSceneWithHistory = (next: LayoutScene) => {
+    setScene(next);
+    rememberScene(next);
+  };
+
+  const setSceneFromHistory = (nextHistory: typeof sceneHistory) => {
+    setSceneHistory(nextHistory);
+    setScene(cloneScene(nextHistory.present));
+    setBaseline(cloneScene(nextHistory.present));
+    setSelection(nextHistory.present.props[0] ? { kind: "prop", id: nextHistory.present.props[0].id } : null);
+    clearGeneratedState();
+  };
+
   const loadPreset = (id: string) => {
     const preset = presets.find((candidate) => candidate.id === id) ?? presets[0];
     const next = cloneScene(preset);
     setPresetId(id);
-    setScene(next);
+    setSceneWithHistory(next);
     setBaseline(cloneScene(next));
     setSelection(next.props[0] ? { kind: "prop", id: next.props[0].id } : null);
     setCostProfileId("balanced");
@@ -93,31 +117,35 @@ export default function App() {
   };
 
   const moveProp = (id: string, x: number, y: number) => {
-    setScene((current) =>
-      applyProp(current, id, (prop) => {
+    setScene((current) => {
+      const next = applyProp(current, id, (prop) => {
         const surface = findSurfaceForProp(prop, current.room.surfaces);
         if (!surface || prop.pinned) {
           return prop;
         }
         return clampPropToSurface({ ...prop, pose: { ...prop.pose, x, y } }, surface);
-      })
-    );
+      });
+      rememberScene(next);
+      return next;
+    });
     setBenchmark(null);
     setDiagnostics(null);
     setStudyVotes([]);
   };
 
   const rotateProp = (id: string) => {
-    setScene((current) =>
-      applyProp(current, id, (prop) => {
+    setScene((current) => {
+      const next = applyProp(current, id, (prop) => {
         if (prop.pinned) {
           return prop;
         }
         const surface = findSurfaceForProp(prop, current.room.surfaces);
         const rotated = { ...prop, pose: { ...prop.pose, rotation: nextOrientation(prop) } };
         return surface ? clampPropToSurface(rotated, surface) : rotated;
-      })
-    );
+      });
+      rememberScene(next);
+      return next;
+    });
     setBenchmark(null);
     setDiagnostics(null);
     setStudyVotes([]);
@@ -129,7 +157,11 @@ export default function App() {
       return;
     }
 
-    setScene((current) => applyProp(current, id, (prop) => ({ ...prop, pinned: !prop.pinned })));
+    setScene((current) => {
+      const next = applyProp(current, id, (prop) => ({ ...prop, pinned: !prop.pinned }));
+      rememberScene(next);
+      return next;
+    });
     setBaseline((current) =>
       applyProp(current, id, (prop) => ({
         ...prop,
@@ -143,7 +175,7 @@ export default function App() {
   };
 
   const runOptimizer = () => {
-    if (isOptimizing) {
+    if (isOptimizing || !canRun) {
       return;
     }
     setIsOptimizing(true);
@@ -174,7 +206,7 @@ export default function App() {
   };
 
   const applySuggestion = (suggestion: Suggestion) => {
-    setScene(cloneScene(suggestion.scene));
+    setSceneWithHistory(cloneScene(suggestion.scene));
     setSelection(suggestion.scene.props[0] ? { kind: "prop", id: suggestion.scene.props[0].id } : null);
     setBenchmark(null);
     setDiagnostics(null);
@@ -182,7 +214,7 @@ export default function App() {
 
   const resetScene = () => {
     const reset = cloneScene(baseline);
-    setScene(reset);
+    setSceneWithHistory(reset);
     setSelection(reset.props[0] ? { kind: "prop", id: reset.props[0].id } : null);
     setSuggestions([]);
     setDiagnostics(null);
@@ -197,15 +229,17 @@ export default function App() {
 
   const exportCurrentScene = () => {
     const exported = exportScene(scene);
+    const download = createJsonDownload(`${scene.id}-scene`, scene);
     setJson(exported);
     setJsonError(null);
+    downloadJsonFile(download);
     navigator.clipboard?.writeText(exported).catch(() => undefined);
   };
 
   const importCurrentScene = () => {
     try {
       const imported = normalizeScene(importScene(json));
-      setScene(imported);
+      setSceneWithHistory(imported);
       setBaseline(cloneScene(imported));
       setSelection(imported.props[0] ? { kind: "prop", id: imported.props[0].id } : null);
       setCostProfileId("custom");
@@ -220,12 +254,18 @@ export default function App() {
   };
 
   const runEvaluation = () => {
+    if (!canRun) {
+      return;
+    }
     const results = runBenchmark(scene, scene.metadata?.evaluationSeeds ?? ["alpha", "bravo", "charlie"], Math.min(iterations, 2600));
     setBenchmark({ results, summary: summarizeBenchmark(results) });
     setBenchVisible(true);
   };
 
   const replayEvaluationSeeds = () => {
+    if (!canRun) {
+      return;
+    }
     const seeds = scene.metadata?.evaluationSeeds ?? ["alpha", "bravo", "charlie"];
     const cappedIterations = Math.min(iterations, 2600);
     const results = runBenchmark(scene, seeds, cappedIterations);
@@ -237,12 +277,15 @@ export default function App() {
   };
 
   const exportBenchmarkReport = () => {
-    if (!benchmark) {
+    if (!benchmark || !canRun) {
       return;
     }
-    const exported = JSON.stringify(createBenchmarkReport(scene, benchmark.results, suggestions), null, 2);
+    const report = createBenchmarkReport(scene, benchmark.results, suggestions);
+    const download = createJsonDownload(`${scene.id}-benchmark`, report);
+    const exported = download.content;
     setJson(exported);
     setJsonError(null);
+    downloadJsonFile(download);
     navigator.clipboard?.writeText(exported).catch(() => undefined);
   };
 
@@ -250,24 +293,37 @@ export default function App() {
     setScene((current) => {
       const result = addPrimitive(current, kind);
       setSelection(result.selection);
+      rememberScene(result.scene);
       return result.scene;
     });
     clearGeneratedState();
   };
 
   const updateAuthoringSelection = (patch: PrimitivePatch) => {
-    setScene((current) => updatePrimitive(current, selection, patch));
+    setScene((current) => {
+      const next = updatePrimitive(current, selection, patch);
+      rememberScene(next);
+      return next;
+    });
     clearGeneratedState();
   };
 
   const deleteAuthoringSelection = () => {
-    setScene((current) => deletePrimitive(current, selection));
+    setScene((current) => {
+      const next = deletePrimitive(current, selection);
+      rememberScene(next);
+      return next;
+    });
     setSelection(null);
     clearGeneratedState();
   };
 
   const moveAuthoringPrimitive = (target: EditableSelection, point: Vec2) => {
-    setScene((current) => movePrimitiveTo(current, target, point));
+    setScene((current) => {
+      const next = movePrimitiveTo(current, target, point);
+      rememberScene(next);
+      return next;
+    });
     setBenchmark(null);
     setDiagnostics(null);
     setStudyVotes([]);
@@ -276,14 +332,22 @@ export default function App() {
   const changeCostProfile = (profileId: CostProfile["id"]) => {
     setCostProfileId(profileId);
     if (profileId !== "custom") {
-      setScene((current) => applyCostProfile(current, profileId));
+      setScene((current) => {
+        const next = applyCostProfile(current, profileId);
+        rememberScene(next);
+        return next;
+      });
     }
     clearGeneratedState();
   };
 
   const changeCostWeight = (key: keyof LayoutScene["weights"], value: number) => {
     setCostProfileId("custom");
-    setScene((current) => updateSceneWeight(current, key, value));
+    setScene((current) => {
+      const next = updateSceneWeight(current, key, value);
+      rememberScene(next);
+      return next;
+    });
     clearGeneratedState();
   };
 
@@ -292,10 +356,30 @@ export default function App() {
   };
 
   const exportStudyReport = () => {
-    const exported = JSON.stringify(createStudyReport(scene, studyVotes), null, 2);
+    if (!canRun) {
+      return;
+    }
+    const report = createStudyReport(scene, studyVotes);
+    const download = createJsonDownload(`${scene.id}-study`, report);
+    const exported = download.content;
     setJson(exported);
     setJsonError(null);
+    downloadJsonFile(download);
     navigator.clipboard?.writeText(exported).catch(() => undefined);
+  };
+
+  const undoScene = () => {
+    if (sceneHistory.past.length === 0) {
+      return;
+    }
+    setSceneFromHistory(undoSceneHistory(sceneHistory));
+  };
+
+  const redoScene = () => {
+    if (sceneHistory.future.length === 0) {
+      return;
+    }
+    setSceneFromHistory(redoSceneHistory(sceneHistory));
   };
 
   return (
@@ -337,6 +421,16 @@ export default function App() {
           <button type="button" onClick={resetScenario}>
             Reset scenario
           </button>
+          <div className="button-row history-controls">
+            <button type="button" onClick={undoScene} disabled={sceneHistory.past.length === 0}>
+              <Undo2 size={16} />
+              Undo
+            </button>
+            <button type="button" onClick={redoScene} disabled={sceneHistory.future.length === 0}>
+              <Redo2 size={16} />
+              Redo
+            </button>
+          </div>
         </section>
         <ObjectPalette
           scene={scene}
@@ -359,6 +453,8 @@ export default function App() {
           suggestions={suggestions}
           diagnostics={diagnostics}
           isRunning={isOptimizing}
+          canRun={canRun}
+          disabledReason={canRun ? null : "Fix validation errors before running."}
           onSeedChange={setSeed}
           onIterationsChange={setIterations}
           onRun={runOptimizer}
@@ -370,11 +466,13 @@ export default function App() {
       <LayoutCanvas scene={scene} selection={selection} onSelect={setSelection} onMoveProp={moveProp} onMovePrimitive={moveAuthoringPrimitive} />
       <aside className="sidebar right-sidebar">
         <ScorePanel score={score} />
+        <ValidationPanel report={validationReport} onSelectTarget={setSelection} />
         <CostProfilePanel profileId={costProfileId} weights={scene.weights} onProfileChange={changeCostProfile} onWeightChange={changeCostWeight} />
         <EvaluationPanel
           visible={benchVisible}
           results={benchmark?.results ?? null}
           summary={benchmark?.summary ?? null}
+          canRun={canRun}
           onToggle={() => setBenchVisible((visible) => !visible)}
           onRun={runEvaluation}
           onReplaySeeds={replayEvaluationSeeds}
@@ -385,6 +483,7 @@ export default function App() {
           suggestions={suggestions}
           currentScene={scene}
           votes={studyVotes}
+          canExport={canRun}
           onVote={recordStudyVote}
           onExportReport={exportStudyReport}
           onApplySuggestion={applySuggestion}

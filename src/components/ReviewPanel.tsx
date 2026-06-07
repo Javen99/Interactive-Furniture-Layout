@@ -5,6 +5,7 @@ type ReviewPanelProps = {
   suggestions: Suggestion[];
   currentScene: LayoutScene;
   votes: StudyVote[];
+  canExport: boolean;
   onVote: (suggestion: Suggestion, pair: [Suggestion, Suggestion]) => void;
   onExportReport: () => void;
   onApplySuggestion: (suggestion: Suggestion) => void;
@@ -37,7 +38,7 @@ function MiniLayout({ scene }: { scene: LayoutScene }) {
   );
 }
 
-export default function ReviewPanel({ suggestions, currentScene, votes, onVote, onExportReport, onApplySuggestion }: ReviewPanelProps) {
+export default function ReviewPanel({ suggestions, currentScene, votes, canExport, onVote, onExportReport, onApplySuggestion }: ReviewPanelProps) {
   const pair = suggestions.slice(0, 2) as [Suggestion, Suggestion] | Suggestion[];
 
   return (
@@ -71,10 +72,11 @@ export default function ReviewPanel({ suggestions, currentScene, votes, onVote, 
             <Shuffle size={14} />
             <span>Scores are hidden here; {votes.length} preference votes recorded for export.</span>
           </div>
-          <button type="button" onClick={onExportReport} disabled={votes.length === 0}>
+          <button type="button" onClick={onExportReport} disabled={votes.length === 0 || !canExport}>
             <Download size={15} />
             Export study
           </button>
+          {!canExport ? <p className="json-error">Fix validation errors before exporting a study report.</p> : null}
           <MiniLayout scene={currentScene} />
         </>
       )}

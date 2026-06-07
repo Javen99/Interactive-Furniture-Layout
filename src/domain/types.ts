@@ -122,6 +122,27 @@ export type EditableSelection =
   | { kind: "pathwayStart"; id: string }
   | { kind: "pathwayEnd"; id: string };
 
+export type ValidationSeverity = "error" | "warning";
+
+export type ValidationTarget = {
+  kind: "scene" | "room" | "wall" | "surface" | "fixture" | "accessZone" | "pathway" | "prop" | "weight";
+  id?: string;
+  field?: string;
+};
+
+export type ValidationIssue = {
+  id: string;
+  severity: ValidationSeverity;
+  target: ValidationTarget;
+  message: string;
+};
+
+export type ValidationReport = {
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  issues: ValidationIssue[];
+};
+
 export type ScoreTermKey = keyof CostWeights;
 
 export type ScoreTerm = {

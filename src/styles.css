@@ -472,6 +472,14 @@ button:disabled {
   gap: 7px;
 }
 
+.history-controls {
+  margin-top: 8px;
+}
+
+.history-controls button {
+  flex: 1;
+}
+
 .prop-actions button {
   width: 34px;
   height: 34px;
@@ -657,6 +665,51 @@ button:disabled {
   font-size: 0.8rem;
   line-height: 1.35;
   margin: -4px 0 10px;
+}
+
+.validation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.validation-row {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 7px 9px;
+}
+
+.validation-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.validation-row.error {
+  color: var(--danger);
+  border-color: rgba(178, 59, 59, 0.32);
+  background: rgba(178, 59, 59, 0.06);
+}
+
+.validation-row.warning {
+  color: var(--amber);
+  border-color: rgba(184, 110, 30, 0.32);
+  background: rgba(184, 110, 30, 0.06);
+}
+
+.validation-more {
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 4px 2px;
 }
 
 .weight-field {

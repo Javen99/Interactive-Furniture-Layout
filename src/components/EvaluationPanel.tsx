@@ -5,6 +5,7 @@ type EvaluationPanelProps = {
   visible: boolean;
   results: BenchmarkResult[] | null;
   summary: BenchmarkSummary | null;
+  canRun: boolean;
   onToggle: () => void;
   onRun: () => void;
   onReplaySeeds: () => void;
@@ -15,7 +16,7 @@ function topTerm(result: BenchmarkResult) {
   return [...result.termDeltas].sort((a, b) => b.improvement - a.improvement)[0];
 }
 
-export default function EvaluationPanel({ visible, results, summary, onToggle, onRun, onReplaySeeds, onExportReport }: EvaluationPanelProps) {
+export default function EvaluationPanel({ visible, results, summary, canRun, onToggle, onRun, onReplaySeeds, onExportReport }: EvaluationPanelProps) {
   return (
     <section className="panel benchmark-panel">
       <button className="panel-toggle" type="button" onClick={onToggle}>
@@ -25,18 +26,19 @@ export default function EvaluationPanel({ visible, results, summary, onToggle, o
       </button>
       {visible ? (
         <div className="benchmark-body">
-          <button type="button" onClick={onRun}>
+          <button type="button" onClick={onRun} disabled={!canRun}>
             <Play size={16} />
             Run scenario seeds
           </button>
-          <button type="button" onClick={onReplaySeeds}>
+          <button type="button" onClick={onReplaySeeds} disabled={!canRun}>
             <Repeat2 size={16} />
             Replay seeds
           </button>
-          <button type="button" onClick={onExportReport} disabled={!results}>
+          <button type="button" onClick={onExportReport} disabled={!results || !canRun}>
             <BarChart3 size={16} />
             Export report
           </button>
+          {!canRun ? <p className="json-error">Fix validation errors before evaluation.</p> : null}
           {results && summary ? (
             <>
               <div className="benchmark-summary">
