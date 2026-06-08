@@ -18,4 +18,13 @@ describe("serialization", () => {
     expect(imported.weights.accessibility).toBe(defaultWeights.accessibility);
     expect(imported.weights.collision).toBe(oldScene.weights.collision);
   });
+
+  it("imports scenes with or without pathway waypoints", () => {
+    const scene = cloneScene(galleyKitchen);
+    delete scene.room.pathways![0].waypoints;
+    expect(importScene(JSON.stringify(scene)).room.pathways![0].waypoints).toBeUndefined();
+
+    scene.room.pathways![0].waypoints = [{ x: 120, y: 320 }];
+    expect(importScene(JSON.stringify(scene)).room.pathways![0].waypoints).toEqual([{ x: 120, y: 320 }]);
+  });
 });

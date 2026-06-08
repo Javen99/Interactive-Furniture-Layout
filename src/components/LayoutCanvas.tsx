@@ -2,8 +2,9 @@ import type { PointerEvent } from "react";
 import { useRef, useState } from "react";
 import { Lock, Move, PencilRuler, Unlock } from "lucide-react";
 import { getSelectionLabel } from "../domain/authoring";
-import { axisRectToOrientedRect, orientedRectCorners } from "../domain/geometry";
-import type { EditableSelection, Fixture, LayoutScene, PropItem, Vec2 } from "../domain/types";
+import { axisRectToOrientedRect, orientedRectCorners, pathwayToSegments } from "../domain/geometry";
+import { selectedPropSlots } from "../domain/slots";
+import type { CandidateSlot, EditableSelection, Fixture, LayoutScene, PropItem, Vec2 } from "../domain/types";
 
 type LayoutCanvasProps = {
   scene: LayoutScene;
@@ -46,6 +47,18 @@ function pointsForFixture(fixture: Fixture): string {
     .join(" ");
 }
 
+function pointsForSlot(prop: PropItem, slot: CandidateSlot): string {
+  return orientedRectCorners({
+    id: slot.id,
+    center: { x: slot.x, y: slot.y },
+    width: prop.width,
+    height: prop.height,
+    rotation: slot.rotation
+  })
+    .map((point) => `${point.x},${point.y}`)
+    .join(" ");
+}
+
 export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, onMovePrimitive }: LayoutCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragSelection, setDragSelection] = useState<EditableSelection | null>(null);
@@ -75,6 +88,7 @@ export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, o
   };
 
   const selectedProp = selection?.kind === "prop" ? scene.props.find((prop) => prop.id === selection.id) : undefined;
+  const slotPreview = selectedProp ? selectedPropSlots(scene, selectedProp.id, 10) : [];
   const selectedLabel = getSelectionLabel(scene, selection);
 
   const selectAndDrag = (event: PointerEvent<SVGElement>, nextSelection: EditableSelection, draggable = true) => {
@@ -154,15 +168,27 @@ export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, o
             className={selection?.id === pathway.id && selection.kind.startsWith("pathway") ? "primitive-group selected" : "primitive-group"}
             onPointerDown={(event) => selectAndDrag(event, { kind: "pathway", id: pathway.id })}
           >
-            <line
-              className="pathway"
-              x1={pathway.start.x}
-              y1={pathway.start.y}
-              x2={pathway.end.x}
-              y2={pathway.end.y}
-              strokeWidth={pathway.width}
-            />
-            <line className="pathway-center" x1={pathway.start.x} y1={pathway.start.y} x2={pathway.end.x} y2={pathway.end.y} />
+            {pathwayToSegments(pathway).map((segment) => (
+              <line
+                key={`${segment.id}-corridor`}
+                className="pathway"
+                x1={segment.start.x}
+                y1={segment.start.y}
+                x2={segment.end.x}
+                y2={segment.end.y}
+                strokeWidth={segment.width}
+              />
+            ))}
+            {pathwayToSegments(pathway).map((segment) => (
+              <line
+                key={`${segment.id}-center`}
+                className="pathway-center"
+                x1={segment.start.x}
+                y1={segment.start.y}
+                x2={segment.end.x}
+                y2={segment.end.y}
+              />
+            ))}
             <circle
               className={selection?.kind === "pathwayStart" && selection.id === pathway.id ? "pathway-handle selected" : "pathway-handle"}
               cx={pathway.start.x}
@@ -170,6 +196,20 @@ export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, o
               r="10"
               onPointerDown={(event) => selectAndDrag(event, { kind: "pathwayStart", id: pathway.id })}
             />
+            {(pathway.waypoints ?? []).map((waypoint, index) => (
+              <circle
+                key={`${pathway.id}-waypoint-${index}`}
+                className={
+                  selection?.kind === "pathwayWaypoint" && selection.id === pathway.id && selection.waypointIndex === index
+                    ? "pathway-handle pathway-waypoint selected"
+                    : "pathway-handle pathway-waypoint"
+                }
+                cx={waypoint.x}
+                cy={waypoint.y}
+                r="8"
+                onPointerDown={(event) => selectAndDrag(event, { kind: "pathwayWaypoint", id: pathway.id, waypointIndex: index })}
+              />
+            ))}
             <circle
               className={selection?.kind === "pathwayEnd" && selection.id === pathway.id ? "pathway-handle selected" : "pathway-handle"}
               cx={pathway.end.x}
@@ -194,6 +234,17 @@ export default function LayoutCanvas({ scene, selection, onSelect, onMoveProp, o
             </text>
           </g>
         ))}
+        {selectedProp ? (
+          <g className="slot-preview-group" aria-label={`Candidate slots for ${selectedProp.label}`}>
+            {slotPreview.map((slot, index) => (
+              <g className={index === 0 ? "slot-preview best" : "slot-preview"} key={slot.id}>
+                <polygon points={pointsForSlot(selectedProp, slot)} />
+                <circle cx={slot.x} cy={slot.y} r="4" />
+                <title>{`${slot.surfaceId} quality ${slot.quality.toFixed(2)}`}</title>
+              </g>
+            ))}
+          </g>
+        ) : null}
         {scene.props.map((prop) => {
           const selected = selection?.kind === "prop" && prop.id === selection.id;
           return (

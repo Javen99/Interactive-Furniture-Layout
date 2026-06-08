@@ -1,4 +1,4 @@
-import type { AxisAlignedRect, Pathway, PropItem, Surface, Vec2 } from "./types";
+import type { AxisAlignedRect, PathSegment, Pathway, PropItem, Surface, Vec2 } from "./types";
 
 export type OrientedRect = {
   id: string;
@@ -173,8 +173,32 @@ export function pointLineDistance(point: Vec2, start: Vec2, end: Vec2): number {
 }
 
 export function orientedRectBlocksPathway(rect: OrientedRect, pathway: Pathway): boolean {
-  const halfClearance = pathway.width / 2 + Math.min(rect.width, rect.height) / 2;
-  return pointLineDistance(rect.center, pathway.start, pathway.end) < halfClearance;
+  return orientedRectBlocksPathwaySegments(rect, pathway);
+}
+
+export function pathwayToSegments(pathway: Pathway): PathSegment[] {
+  const points = [pathway.start, ...(pathway.waypoints ?? []), pathway.end];
+  const segments: PathSegment[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    segments.push({
+      id: `${pathway.id}-segment-${index}`,
+      pathwayId: pathway.id,
+      start: points[index],
+      end: points[index + 1],
+      width: pathway.width,
+      importance: pathway.importance
+    });
+  }
+  return segments;
+}
+
+export function orientedRectBlocksPathSegment(rect: OrientedRect, segment: PathSegment): boolean {
+  const halfClearance = segment.width / 2 + Math.min(rect.width, rect.height) / 2;
+  return pointLineDistance(rect.center, segment.start, segment.end) < halfClearance;
+}
+
+export function orientedRectBlocksPathwaySegments(rect: OrientedRect, pathway: Pathway): boolean {
+  return pathwayToSegments(pathway).some((segment) => orientedRectBlocksPathSegment(rect, segment));
 }
 
 export function findSurfaceForProp(prop: PropItem, surfaces: Surface[]): Surface | undefined {

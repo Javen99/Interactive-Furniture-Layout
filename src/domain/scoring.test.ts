@@ -41,6 +41,20 @@ describe("scoring", () => {
     expect(blockedAccess).toBeGreaterThan(clearAccess);
   });
 
+  it("penalizes props blocking routed pathway segments", () => {
+    const clear = cloneScene(galleyKitchen);
+    const blocked = cloneScene(galleyKitchen);
+    clear.room.pathways = [
+      { id: "route", label: "Route", start: { x: 100, y: 500 }, waypoints: [{ x: 100, y: 260 }], end: { x: 520, y: 260 }, width: 64, importance: 1 }
+    ];
+    blocked.room.pathways = clear.room.pathways;
+    clear.props.find((prop) => prop.id === "board")!.pose = { x: 740, y: 140, rotation: 0, surfaceId: "back-run" };
+    blocked.props.find((prop) => prop.id === "board")!.pose = { x: 100, y: 210, rotation: 0, surfaceId: "back-run" };
+    const clearAccess = scoreScene(clear).terms.find((term) => term.key === "accessibility")!.weighted;
+    const blockedAccess = scoreScene(blocked).terms.find((term) => term.key === "accessibility")!.weighted;
+    expect(blockedAccess).toBeGreaterThan(clearAccess);
+  });
+
   it("reweights cost profiles without changing raw term facts", () => {
     const balanced = scoreScene(applyCostProfile(cloneScene(galleyKitchen), "balanced"));
     const accessibilityFirst = scoreScene(applyCostProfile(cloneScene(galleyKitchen), "accessibility-first"));

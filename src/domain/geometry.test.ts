@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { axisRectsOverlap, axisRectToOrientedRect, orientedRectBlocksPathway, orientedRectInsideAxisRect, orientedRectsOverlap, propToOrientedRect } from "./geometry";
+import {
+  axisRectsOverlap,
+  axisRectToOrientedRect,
+  orientedRectBlocksPathway,
+  orientedRectBlocksPathwaySegments,
+  orientedRectInsideAxisRect,
+  orientedRectsOverlap,
+  pathwayToSegments,
+  propToOrientedRect
+} from "./geometry";
 import type { PropItem, Surface } from "./types";
 
 const surface: Surface = {
@@ -72,5 +81,39 @@ describe("geometry", () => {
     };
     expect(orientedRectBlocksPathway(propToOrientedRect(prop("blocked", 100, 56, 0)), pathway)).toBe(true);
     expect(orientedRectBlocksPathway(propToOrientedRect(prop("clear", 100, 96, 0)), pathway)).toBe(false);
+  });
+
+  it("segments routed pathways through waypoints", () => {
+    const pathway = {
+      id: "route",
+      label: "Route",
+      start: { x: 0, y: 0 },
+      waypoints: [
+        { x: 80, y: 0 },
+        { x: 80, y: 80 }
+      ],
+      end: { x: 160, y: 80 },
+      width: 40,
+      importance: 1
+    };
+    expect(pathwayToSegments(pathway).map((segment) => [segment.start, segment.end])).toEqual([
+      [{ x: 0, y: 0 }, { x: 80, y: 0 }],
+      [{ x: 80, y: 0 }, { x: 80, y: 80 }],
+      [{ x: 80, y: 80 }, { x: 160, y: 80 }]
+    ]);
+  });
+
+  it("detects props blocking any routed pathway segment", () => {
+    const pathway = {
+      id: "route",
+      label: "Route",
+      start: { x: 0, y: 0 },
+      waypoints: [{ x: 0, y: 100 }],
+      end: { x: 160, y: 100 },
+      width: 40,
+      importance: 1
+    };
+    expect(orientedRectBlocksPathwaySegments(propToOrientedRect(prop("corner", 0, 75, 0)), pathway)).toBe(true);
+    expect(orientedRectBlocksPathwaySegments(propToOrientedRect(prop("clear", 120, 30, 0)), pathway)).toBe(false);
   });
 });

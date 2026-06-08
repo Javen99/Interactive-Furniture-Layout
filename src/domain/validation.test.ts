@@ -58,6 +58,18 @@ describe("validation", () => {
     expect(report.errors.some((issue) => issue.message.includes("Pathway width"))).toBe(true);
   });
 
+  it("warns about off-room pathway waypoints", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.room.pathways![0].waypoints = [
+      { x: -20, y: 120 },
+      { x: -30, y: 140 },
+      { x: -40, y: 160 }
+    ];
+    const report = validateScene(scene);
+    expect(report.warnings.some((issue) => issue.message.includes("waypoint 1 is outside"))).toBe(true);
+    expect(report.warnings.some((issue) => issue.message.includes("several off-room waypoints"))).toBe(true);
+  });
+
   it("warns about out-of-room primitives without blocking optimization", () => {
     const scene = cloneScene(galleyKitchen);
     scene.room.surfaces[0].x = -20;
@@ -73,5 +85,17 @@ describe("validation", () => {
     scene.props[0].pose.surfaceId = "back-run";
     const report = validateScene(scene);
     expect(report.errors.some((issue) => issue.message.includes("does not allow"))).toBe(true);
+  });
+
+  it("warns about props and surfaces without usable candidate slots", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.room.surfaces.push({ id: "tiny", label: "Tiny", kind: "worktop", wallEdge: "none", x: 20, y: 20, width: 20, height: 20 });
+    scene.props[0].width = 200;
+    scene.props[0].height = 200;
+    scene.props[0].pose.surfaceId = "tiny";
+    scene.props[0].allowedSurfaceIds = ["tiny"];
+    const report = validateScene(scene);
+    expect(report.warnings.some((issue) => issue.message.includes("no usable candidate slots"))).toBe(true);
+    expect(report.warnings.some((issue) => issue.message.includes("too large or constrained"))).toBe(true);
   });
 });

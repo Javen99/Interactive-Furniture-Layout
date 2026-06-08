@@ -31,6 +31,7 @@ export type PrimitivePatch = {
   importance?: number;
   start?: Vec2;
   end?: Vec2;
+  waypoints?: Vec2[];
 };
 
 const roomInset = 24;
@@ -233,19 +234,48 @@ export function updatePrimitive(scene: LayoutScene, selection: EditableSelection
           return pathway;
         }
 
-        if (pathwayKind === "pathwayStart") {
-          return { ...pathway, start: clampPointToRoom((patch.start ?? pathway.start) as Vec2, scene) };
-        }
-        if (pathwayKind === "pathwayEnd") {
-          return { ...pathway, end: clampPointToRoom((patch.end ?? pathway.end) as Vec2, scene) };
-        }
-        return {
+        const basePathway = {
           ...pathway,
-          ...patch,
-          start: patch.start ? clampPointToRoom(patch.start as Vec2, scene) : pathway.start,
-          end: patch.end ? clampPointToRoom(patch.end as Vec2, scene) : pathway.end,
+          label: patch.label ?? pathway.label,
           width: Math.max(8, Number(patch.width ?? pathway.width)),
           importance: Math.max(0, Number(patch.importance ?? pathway.importance))
+        };
+        const patchedWaypoints = patch.waypoints ? patch.waypoints.map((waypoint) => clampPointToRoom(waypoint, scene)) : pathway.waypoints;
+
+        if (pathwayKind === "pathwayStart") {
+          return {
+            ...basePathway,
+            start: clampPointToRoom((patch.start ?? pathway.start) as Vec2, scene),
+            end: patch.end ? clampPointToRoom(patch.end as Vec2, scene) : pathway.end,
+            waypoints: patchedWaypoints
+          };
+        }
+        if (pathwayKind === "pathwayEnd") {
+          return {
+            ...basePathway,
+            start: patch.start ? clampPointToRoom(patch.start as Vec2, scene) : pathway.start,
+            end: clampPointToRoom((patch.end ?? pathway.end) as Vec2, scene),
+            waypoints: patchedWaypoints
+          };
+        }
+        if (pathwayKind === "pathwayWaypoint") {
+          const waypoints = [...(patchedWaypoints ?? [])];
+          const index = selection.waypointIndex;
+          if (waypoints[index]) {
+            waypoints[index] = clampPointToRoom((patch.waypoints?.[index] ?? waypoints[index]) as Vec2, scene);
+          }
+          return {
+            ...basePathway,
+            start: patch.start ? clampPointToRoom(patch.start as Vec2, scene) : pathway.start,
+            end: patch.end ? clampPointToRoom(patch.end as Vec2, scene) : pathway.end,
+            waypoints
+          };
+        }
+        return {
+          ...basePathway,
+          start: patch.start ? clampPointToRoom(patch.start as Vec2, scene) : pathway.start,
+          end: patch.end ? clampPointToRoom(patch.end as Vec2, scene) : pathway.end,
+          waypoints: patchedWaypoints
         } as Pathway;
       })
     }
@@ -286,11 +316,21 @@ export function movePrimitiveTo(scene: LayoutScene, selection: EditableSelection
     return updatePrimitive(scene, selection, { end: clampedPoint } as PrimitivePatch);
   }
 
+  if (selection.kind === "pathwayWaypoint") {
+    const waypoints = [...(pathway.waypoints ?? [])];
+    if (waypoints[selection.waypointIndex]) {
+      waypoints[selection.waypointIndex] = clampedPoint;
+      return updatePrimitive(scene, selection, { waypoints } as PrimitivePatch);
+    }
+    return scene;
+  }
+
   const center = { x: (pathway.start.x + pathway.end.x) / 2, y: (pathway.start.y + pathway.end.y) / 2 };
   const delta = { x: clampedPoint.x - center.x, y: clampedPoint.y - center.y };
   return updatePrimitive(scene, selection, {
     start: clampPointToRoom({ x: pathway.start.x + delta.x, y: pathway.start.y + delta.y }, scene),
-    end: clampPointToRoom({ x: pathway.end.x + delta.x, y: pathway.end.y + delta.y }, scene)
+    end: clampPointToRoom({ x: pathway.end.x + delta.x, y: pathway.end.y + delta.y }, scene),
+    waypoints: pathway.waypoints?.map((waypoint) => clampPointToRoom({ x: waypoint.x + delta.x, y: waypoint.y + delta.y }, scene))
   } as PrimitivePatch);
 }
 
@@ -349,9 +389,47 @@ export function deletePrimitive(scene: LayoutScene, selection: EditableSelection
     };
   }
 
+  if (selection.kind === "pathwayWaypoint") {
+    return removePathwayWaypoint(scene, selection.id, selection.waypointIndex);
+  }
+
   return {
     ...scene,
     room: { ...scene.room, pathways: (scene.room.pathways ?? []).filter((pathway) => pathway.id !== selection.id) }
+  };
+}
+
+export function addPathwayWaypoint(scene: LayoutScene, pathwayId: string): LayoutScene {
+  return {
+    ...scene,
+    room: {
+      ...scene.room,
+      pathways: (scene.room.pathways ?? []).map((pathway) => {
+        if (pathway.id !== pathwayId) {
+          return pathway;
+        }
+        const previous = pathway.waypoints?.at(-1) ?? pathway.start;
+        const next = {
+          x: previous.x + (pathway.end.x - previous.x) / 2,
+          y: previous.y + (pathway.end.y - previous.y) / 2
+        };
+        return { ...pathway, waypoints: [...(pathway.waypoints ?? []), clampPointToRoom(next, scene)] };
+      })
+    }
+  };
+}
+
+export function removePathwayWaypoint(scene: LayoutScene, pathwayId: string, waypointIndex: number): LayoutScene {
+  return {
+    ...scene,
+    room: {
+      ...scene.room,
+      pathways: (scene.room.pathways ?? []).map((pathway) =>
+        pathway.id === pathwayId
+          ? { ...pathway, waypoints: (pathway.waypoints ?? []).filter((_, index) => index !== waypointIndex) }
+          : pathway
+      )
+    }
   };
 }
 
@@ -379,6 +457,9 @@ export function getSelectionLabel(scene: LayoutScene, selection: EditableSelecti
   }
   if (selection.kind === "pathwayEnd") {
     return `${label} end`;
+  }
+  if (selection.kind === "pathwayWaypoint") {
+    return `${label} waypoint ${selection.waypointIndex + 1}`;
   }
   return label;
 }

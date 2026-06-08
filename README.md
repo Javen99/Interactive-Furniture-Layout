@@ -36,18 +36,20 @@ The implementation here is deliberately hobby-sized. It does not use proprietary
 - Scene JSON model for room bounds, surfaces, fixtures, access zones, pathways, view/focal points, and movable props.
 - Drag, rotate, pin, import, and export controls.
 - Visual authoring controls for creating, selecting, moving, editing, and deleting surfaces, fixtures, access zones, and pathways.
+- Routed pathway authoring with optional waypoint handles and segment-aware accessibility scoring.
 - Scene validation for duplicate IDs, missing references, invalid dimensions, invalid weights, invalid pathways, and out-of-room warnings.
 - Undo and redo for scene-authoring edits, imports, resets, suggestion application, and cost-weight changes.
 - Cost-weight profiles for balanced, accessibility-first, display-first, and custom scoring.
-- Seeded simulated-annealing optimizer with ranked suggestions.
+- Seeded simulated-annealing optimizer with ranked suggestions and candidate-slot placement proposals.
 - Score breakdown for bounds, collisions, pinned movement, clearance, proximity, surface fit, alignment, balance, and visibility.
 - Scenario gallery with repeated-seed benchmark summaries.
 - Deterministic benchmark-seed replay for reproducing ranked suggestions.
 - Optimizer diagnostics for accepted/rejected moves, score history, and rejected cost causes.
-- Access-zone and pathway primitives for keeping fixture approaches and worktop fronts usable.
+- Access-zone and routed pathway primitives for keeping fixture approaches, worktop fronts, and route corridors usable.
+- Candidate slot previews for the selected prop, showing plausible legal placements around fixtures, access zones, and pathways.
 - Downloadable scene JSON, benchmark reports, and study reports for sharing scenario evidence.
 - Blind A/B review mode with local preference voting and exportable study reports.
-- Unit tests for geometry, scoring, and optimizer repeatability.
+- Unit tests for geometry, routed pathways, slot generation, scoring, validation, authoring, and optimizer repeatability.
 
 ## Tech Stack
 
@@ -96,6 +98,7 @@ GitHub Pages is configured through `.github/workflows/pages.yml`.
 - `src/domain/sceneHistory.ts`: lightweight undo/redo scene snapshots.
 - `src/domain/downloads.ts`: JSON download metadata and browser download helper.
 - `src/domain/geometry.ts`: oriented rectangle math, containment, overlap, and placement helpers.
+- `src/domain/slots.ts`: deterministic candidate surface-slot generation and quality scoring.
 - `src/domain/scoring.ts`: weighted guideline terms.
 - `src/domain/optimizer.ts`: deterministic stochastic search.
 - `src/domain/evaluation.ts`: repeated-seed benchmark summaries, seed replay, and study reports.
@@ -108,11 +111,12 @@ GitHub Pages is configured through `.github/workflows/pages.yml`.
 - Check the validation panel before running benchmarks; hard errors block optimization, warnings flag odd but runnable scenes.
 - Use Replay seeds to regenerate ranked suggestions from the same scenario seeds and confirm optimizer changes remain deterministic.
 - Tune cost profiles intentionally: accessibility-first should improve clear approaches and pathways, while display-first should prioritize balance and visibility.
+- Select a prop to inspect candidate slot previews; the best outlined slot should avoid blocked fixtures, access zones, and route corridors.
 - Use Blind Review to record score-hidden A/B preferences, then export a study report for qualitative evidence.
 - Add or edit synthetic scenarios when introducing a new term so regressions are visible in tests and exported reports.
 
 ## Roadmap
 
 - Add a Web Worker only if benchmark runs become visibly blocking.
-- Add richer pathway routing and stronger placement validation before attempting whole-room furniture layout.
+- Add richer prop relationship rules and stronger scenario benchmark coverage before attempting whole-room furniture layout.
 - Keep Unity/C# as a later port target once this TypeScript version is a stable reference.

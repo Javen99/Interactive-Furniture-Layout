@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addPrimitive, deletePrimitive, movePrimitiveTo, updatePrimitive } from "./authoring";
+import { addPathwayWaypoint, addPrimitive, deletePrimitive, movePrimitiveTo, removePathwayWaypoint, updatePrimitive } from "./authoring";
 import { cloneScene } from "./optimizer";
 import { galleyKitchen } from "./presets";
 
@@ -31,6 +31,32 @@ describe("authoring", () => {
     const pathway = movedEnd.room.pathways?.find((candidate) => candidate.id === pathwayId);
     expect(pathway?.start).toEqual({ x: 44, y: 55 });
     expect(pathway?.end).toEqual({ x: 500, y: 140 });
+  });
+
+  it("adds, moves, and removes pathway waypoints", () => {
+    const added = addPrimitive(cloneScene(galleyKitchen), "pathway");
+    const pathwayId = added.selection.id;
+    const withWaypoint = addPathwayWaypoint(added.scene, pathwayId);
+    const moved = movePrimitiveTo(withWaypoint, { kind: "pathwayWaypoint", id: pathwayId, waypointIndex: 0 }, { x: 300, y: 240 });
+    const waypoint = moved.room.pathways?.find((candidate) => candidate.id === pathwayId)?.waypoints?.[0];
+    expect(waypoint).toEqual({ x: 300, y: 240 });
+    const removed = removePathwayWaypoint(moved, pathwayId, 0);
+    expect(removed.room.pathways?.find((candidate) => candidate.id === pathwayId)?.waypoints).toEqual([]);
+  });
+
+  it("moves whole pathways with waypoint offsets intact", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.room.pathways![0].waypoints = [{ x: 300, y: 320 }];
+    const original = scene.room.pathways![0];
+    const target = { x: 400, y: 360 };
+    const originalCenter = {
+      x: (original.start.x + original.end.x) / 2,
+      y: (original.start.y + original.end.y) / 2
+    };
+    const moved = movePrimitiveTo(scene, { kind: "pathway", id: "door-to-sink" }, target);
+    const pathway = moved.room.pathways![0];
+    expect(pathway.waypoints?.[0].x).toBeCloseTo(300 + target.x - originalCenter.x);
+    expect(pathway.waypoints?.[0].y).toBeCloseTo(320 + target.y - originalCenter.y);
   });
 
   it("keeps scenes usable when deleting a surface", () => {

@@ -45,6 +45,7 @@ export type Pathway = {
   label: string;
   start: Vec2;
   end: Vec2;
+  waypoints?: Vec2[];
   width: number;
   importance: number;
 };
@@ -120,7 +121,39 @@ export type EditableSelection =
   | { kind: "accessZone"; id: string }
   | { kind: "pathway"; id: string }
   | { kind: "pathwayStart"; id: string }
-  | { kind: "pathwayEnd"; id: string };
+  | { kind: "pathwayEnd"; id: string }
+  | { kind: "pathwayWaypoint"; id: string; waypointIndex: number };
+
+export type PathSegment = {
+  id: string;
+  pathwayId: string;
+  start: Vec2;
+  end: Vec2;
+  width: number;
+  importance: number;
+};
+
+export type CandidateSlot = {
+  id: string;
+  propId: string;
+  surfaceId: string;
+  x: number;
+  y: number;
+  rotation: number;
+  quality: number;
+  penalties: {
+    preference: number;
+    fixture: number;
+    access: number;
+    pathway: number;
+    proximity: number;
+  };
+};
+
+export type SlotGenerationOptions = {
+  includeCurrentRotation?: boolean;
+  maxSlots?: number;
+};
 
 export type ValidationSeverity = "error" | "warning";
 

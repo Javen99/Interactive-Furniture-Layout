@@ -10,7 +10,7 @@ import {
   orientedRectAabb,
   orientedRectInsideAxisRect,
   orientedRectsOverlap,
-  orientedRectBlocksPathway,
+  orientedRectBlocksPathwaySegments,
   pointLineDistance,
   propToOrientedRect,
   rectCenter
@@ -223,7 +223,7 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
     }
 
     for (const pathway of scene.room.pathways ?? []) {
-      if (orientedRectBlocksPathway(rect, pathway)) {
+      if (orientedRectBlocksPathwaySegments(rect, pathway)) {
         accessibility += pathway.importance;
       }
     }

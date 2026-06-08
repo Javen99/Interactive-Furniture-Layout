@@ -1,4 +1,5 @@
 import { distance } from "./geometry";
+import { generateCandidateSlots, generateCandidateSlotsForProp } from "./slots";
 import type {
   AxisAlignedRect,
   CostWeights,
@@ -184,6 +185,18 @@ function validatePathway(pathway: Pathway, scene: LayoutScene, issues: Validatio
   if (pointIsFinite(pathway.end) && !pointInsideRoom(pathway.end, scene)) {
     issues.push(makeIssue("warning", { ...target, field: "end" }, "Pathway end is outside the room bounds."));
   }
+  for (const [index, waypoint] of (pathway.waypoints ?? []).entries()) {
+    const waypointTarget = { ...target, field: `waypoints.${index}` };
+    if (!pointIsFinite(waypoint)) {
+      issues.push(makeIssue("error", waypointTarget, `Pathway waypoint ${index + 1} must contain finite coordinates.`));
+    } else if (!pointInsideRoom(waypoint, scene)) {
+      issues.push(makeIssue("warning", waypointTarget, `Pathway waypoint ${index + 1} is outside the room bounds.`));
+    }
+  }
+  const offRoomWaypoints = (pathway.waypoints ?? []).filter((waypoint) => pointIsFinite(waypoint) && !pointInsideRoom(waypoint, scene));
+  if (offRoomWaypoints.length > 2) {
+    issues.push(makeIssue("warning", { ...target, field: "waypoints" }, "Pathway has several off-room waypoints."));
+  }
 }
 
 function validateProp(prop: PropItem, scene: LayoutScene, issues: ValidationIssue[]) {
@@ -225,6 +238,12 @@ function validateProp(prop: PropItem, scene: LayoutScene, issues: ValidationIssu
   if (!Array.isArray(prop.orientationOptions) || prop.orientationOptions.length === 0 || prop.orientationOptions.some((angle) => !isFiniteNumber(angle))) {
     issues.push(makeIssue("error", { ...target, field: "orientationOptions" }, "Prop orientation options must contain finite numbers."));
   }
+  if (prop.allowedSurfaceIds.some((surfaceId) => scene.room.surfaces.some((surface) => surface.id === surfaceId))) {
+    const slots = generateCandidateSlotsForProp(scene, prop, { includeCurrentRotation: true, maxSlots: 1 });
+    if (slots.length === 0) {
+      issues.push(makeIssue("warning", target, "Prop is too large or constrained for any usable allowed surface slot."));
+    }
+  }
 }
 
 export function validateScene(scene: LayoutScene): ValidationReport {
@@ -244,6 +263,12 @@ export function validateScene(scene: LayoutScene): ValidationReport {
 
   for (const surface of scene.room.surfaces) {
     validateRect(surface, { kind: "surface", id: surface.id }, scene, issues);
+    const hasUsableSlot = scene.props
+      .filter((prop) => prop.allowedSurfaceIds.includes(surface.id))
+      .some((prop) => generateCandidateSlots(scene, prop, surface, { includeCurrentRotation: true, maxSlots: 1 }).length > 0);
+    if (!hasUsableSlot) {
+      issues.push(makeIssue("warning", { kind: "surface", id: surface.id }, "Surface has no usable candidate slots for the current props."));
+    }
   }
 
   for (const fixture of scene.room.fixtures) {

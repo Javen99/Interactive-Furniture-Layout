@@ -11,7 +11,15 @@ import ObjectPalette from "./components/ObjectPalette";
 import OptimizerPanel from "./components/OptimizerPanel";
 import JsonPanel from "./components/JsonPanel";
 import ValidationPanel from "./components/ValidationPanel";
-import { addPrimitive, deletePrimitive, movePrimitiveTo, updatePrimitive, type PrimitivePatch } from "./domain/authoring";
+import {
+  addPathwayWaypoint,
+  addPrimitive,
+  deletePrimitive,
+  movePrimitiveTo,
+  removePathwayWaypoint,
+  updatePrimitive,
+  type PrimitivePatch
+} from "./domain/authoring";
 import { applyCostProfile, updateSceneWeight } from "./domain/costProfiles";
 import { createJsonDownload, downloadJsonFile } from "./domain/downloads";
 import { clampPropToSurface, findSurfaceForProp, normalizeDegrees } from "./domain/geometry";
@@ -318,6 +326,27 @@ export default function App() {
     clearGeneratedState();
   };
 
+  const addAuthoringWaypoint = (pathwayId: string) => {
+    const nextWaypointIndex = scene.room.pathways?.find((pathway) => pathway.id === pathwayId)?.waypoints?.length ?? 0;
+    setScene((current) => {
+      const next = addPathwayWaypoint(current, pathwayId);
+      rememberScene(next);
+      return next;
+    });
+    setSelection({ kind: "pathwayWaypoint", id: pathwayId, waypointIndex: nextWaypointIndex });
+    clearGeneratedState();
+  };
+
+  const removeAuthoringWaypoint = (pathwayId: string, waypointIndex: number) => {
+    setScene((current) => {
+      const next = removePathwayWaypoint(current, pathwayId, waypointIndex);
+      rememberScene(next);
+      return next;
+    });
+    setSelection({ kind: "pathway", id: pathwayId });
+    clearGeneratedState();
+  };
+
   const moveAuthoringPrimitive = (target: EditableSelection, point: Vec2) => {
     setScene((current) => {
       const next = movePrimitiveTo(current, target, point);
@@ -446,6 +475,8 @@ export default function App() {
           onAddPrimitive={addAuthoringPrimitive}
           onUpdateSelection={updateAuthoringSelection}
           onDeleteSelection={deleteAuthoringSelection}
+          onAddPathwayWaypoint={addAuthoringWaypoint}
+          onRemovePathwayWaypoint={removeAuthoringWaypoint}
         />
         <OptimizerPanel
           seed={seed}
