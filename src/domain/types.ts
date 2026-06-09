@@ -66,6 +66,37 @@ export type PropItem = {
   preference: PlacementPreference;
 };
 
+export type RelationshipMode = "near" | "avoid";
+
+export type RelationshipMatcher = {
+  propIds?: string[];
+  tags?: string[];
+};
+
+export type RelationshipTarget =
+  | {
+      kind: "fixture";
+      fixtureIds?: string[];
+      fixtureKinds?: FixtureKind[];
+    }
+  | {
+      kind: "prop";
+      propIds?: string[];
+      tags?: string[];
+    };
+
+export type RelationshipRule = {
+  id: string;
+  label: string;
+  enabled: boolean;
+  mode: RelationshipMode;
+  subject: RelationshipMatcher;
+  target: RelationshipTarget;
+  distance: number;
+  tolerance: number;
+  strength: number;
+};
+
 export type RoomPlan = {
   width: number;
   height: number;
@@ -102,6 +133,7 @@ export type LayoutScene = {
   };
   room: RoomPlan;
   props: PropItem[];
+  relationships?: RelationshipRule[];
   weights: CostWeights;
 };
 
@@ -158,7 +190,7 @@ export type SlotGenerationOptions = {
 export type ValidationSeverity = "error" | "warning";
 
 export type ValidationTarget = {
-  kind: "scene" | "room" | "wall" | "surface" | "fixture" | "accessZone" | "pathway" | "prop" | "weight";
+  kind: "scene" | "room" | "wall" | "surface" | "fixture" | "accessZone" | "pathway" | "prop" | "relationship" | "weight";
   id?: string;
   field?: string;
 };

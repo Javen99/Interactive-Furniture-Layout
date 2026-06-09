@@ -1,5 +1,6 @@
 import { clampPropToSurface, distance, findSurfaceForProp, getPlacementBounds, normalizeDegrees } from "./geometry";
 import { createRng, type Rng } from "./random";
+import { cloneRelationshipRules } from "./relationships";
 import { scoreScene } from "./scoring";
 import { applyCandidateSlot, generateCandidateSlots } from "./slots";
 import type { LayoutScene, OptimizerOptions, OptimizerDiagnostics, OptimizerRun, PropItem, RejectedCostCause, ScoreResult, Suggestion, Surface } from "./types";
@@ -38,6 +39,7 @@ export function cloneScene(scene: LayoutScene): LayoutScene {
       allowedSurfaceIds: [...prop.allowedSurfaceIds],
       orientationOptions: [...prop.orientationOptions]
     })),
+    relationships: cloneRelationshipRules(scene.relationships),
     weights: { ...scene.weights }
   };
 }

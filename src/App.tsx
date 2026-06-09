@@ -4,6 +4,7 @@ import AuthoringPanel from "./components/AuthoringPanel";
 import CostProfilePanel from "./components/CostProfilePanel";
 import DiagnosticsPanel from "./components/DiagnosticsPanel";
 import EvaluationPanel from "./components/EvaluationPanel";
+import RelationshipPanel from "./components/RelationshipPanel";
 import ReviewPanel from "./components/ReviewPanel";
 import LayoutCanvas from "./components/LayoutCanvas";
 import ScorePanel from "./components/ScorePanel";
@@ -33,11 +34,22 @@ import {
 } from "./domain/evaluation";
 import { cloneScene, generateSuggestionsWithDiagnostics, normalizeScene } from "./domain/optimizer";
 import { presets } from "./domain/presets";
+import { getSceneRelationshipRules } from "./domain/relationships";
 import { scoreScene } from "./domain/scoring";
 import { createSceneHistory, pushSceneHistory, redoSceneHistory, undoSceneHistory } from "./domain/sceneHistory";
 import { exportScene, importScene } from "./domain/serialization";
 import { canRunOptimization, validateScene } from "./domain/validation";
-import type { CostProfile, EditablePrimitiveKind, EditableSelection, LayoutScene, OptimizerDiagnostics, StudyVote, Suggestion, Vec2 } from "./domain/types";
+import type {
+  CostProfile,
+  EditablePrimitiveKind,
+  EditableSelection,
+  LayoutScene,
+  OptimizerDiagnostics,
+  RelationshipRule,
+  StudyVote,
+  Suggestion,
+  Vec2
+} from "./domain/types";
 
 type BenchmarkState = {
   results: ReturnType<typeof runBenchmark>;
@@ -57,6 +69,44 @@ function nextOrientation(prop: LayoutScene["props"][number]): number {
     return prop.orientationOptions[0] ?? 0;
   }
   return prop.orientationOptions[(current + 1) % prop.orientationOptions.length];
+}
+
+function sceneIds(scene: LayoutScene): Set<string> {
+  return new Set([
+    scene.id,
+    ...scene.room.walls.map((item) => item.id),
+    ...scene.room.surfaces.map((item) => item.id),
+    ...scene.room.fixtures.map((item) => item.id),
+    ...(scene.room.accessZones ?? []).map((item) => item.id),
+    ...(scene.room.pathways ?? []).map((item) => item.id),
+    ...scene.props.map((item) => item.id),
+    ...(scene.relationships ?? []).map((item) => item.id)
+  ]);
+}
+
+function uniqueRelationshipId(scene: LayoutScene, base: string): string {
+  const ids = sceneIds(scene);
+  let index = 1;
+  let candidate = `${base}-${index}`;
+  while (ids.has(candidate)) {
+    index += 1;
+    candidate = `${base}-${index}`;
+  }
+  return candidate;
+}
+
+function newRelationshipRule(scene: LayoutScene): RelationshipRule {
+  return {
+    id: uniqueRelationshipId(scene, "relationship"),
+    label: `Relationship ${(scene.relationships ?? []).length + 1}`,
+    enabled: true,
+    mode: "near",
+    subject: { tags: ["prep"] },
+    target: { kind: "fixture", fixtureKinds: ["sink"] },
+    distance: 96,
+    tolerance: 120,
+    strength: 0.8
+  };
 }
 
 export default function App() {
@@ -358,6 +408,54 @@ export default function App() {
     setStudyVotes([]);
   };
 
+  const addRelationshipRule = () => {
+    setScene((current) => {
+      const relationships = getSceneRelationshipRules(current);
+      const next = { ...current, relationships: [...relationships, newRelationshipRule({ ...current, relationships })] };
+      rememberScene(next);
+      return next;
+    });
+    clearGeneratedState();
+  };
+
+  const updateRelationshipRule = (rule: RelationshipRule) => {
+    setScene((current) => {
+      const relationships = getSceneRelationshipRules(current).map((candidate) => (candidate.id === rule.id ? rule : candidate));
+      const next = { ...current, relationships };
+      rememberScene(next);
+      return next;
+    });
+    clearGeneratedState();
+  };
+
+  const duplicateRelationshipRule = (ruleId: string) => {
+    setScene((current) => {
+      const relationships = getSceneRelationshipRules(current);
+      const source = relationships.find((rule) => rule.id === ruleId);
+      if (!source) {
+        return current;
+      }
+      const duplicate = {
+        ...source,
+        id: uniqueRelationshipId({ ...current, relationships }, `${source.id}-copy`),
+        label: `${source.label} copy`
+      };
+      const next = { ...current, relationships: [...relationships, duplicate] };
+      rememberScene(next);
+      return next;
+    });
+    clearGeneratedState();
+  };
+
+  const deleteRelationshipRule = (ruleId: string) => {
+    setScene((current) => {
+      const next = { ...current, relationships: getSceneRelationshipRules(current).filter((rule) => rule.id !== ruleId) };
+      rememberScene(next);
+      return next;
+    });
+    clearGeneratedState();
+  };
+
   const changeCostProfile = (profileId: CostProfile["id"]) => {
     setCostProfileId(profileId);
     if (profileId !== "custom") {
@@ -499,6 +597,13 @@ export default function App() {
         <ScorePanel score={score} />
         <ValidationPanel report={validationReport} onSelectTarget={setSelection} />
         <CostProfilePanel profileId={costProfileId} weights={scene.weights} onProfileChange={changeCostProfile} onWeightChange={changeCostWeight} />
+        <RelationshipPanel
+          scene={scene}
+          onAddRule={addRelationshipRule}
+          onUpdateRule={updateRelationshipRule}
+          onDuplicateRule={duplicateRelationshipRule}
+          onDeleteRule={deleteRelationshipRule}
+        />
         <EvaluationPanel
           visible={benchVisible}
           results={benchmark?.results ?? null}

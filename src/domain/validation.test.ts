@@ -98,4 +98,62 @@ describe("validation", () => {
     expect(report.warnings.some((issue) => issue.message.includes("no usable candidate slots"))).toBe(true);
     expect(report.warnings.some((issue) => issue.message.includes("too large or constrained"))).toBe(true);
   });
+
+  it("reports invalid relationship rules", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.relationships = [
+      {
+        id: "bad-rule",
+        label: "",
+        enabled: true,
+        mode: "near",
+        subject: {},
+        target: { kind: "fixture" },
+        distance: -1,
+        tolerance: 0,
+        strength: -1
+      }
+    ];
+    const report = validateScene(scene);
+    expect(report.errors.some((issue) => issue.message.includes("distance"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("tolerance"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("strength"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("subject"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("target"))).toBe(true);
+    expect(report.warnings.some((issue) => issue.message.includes("no label"))).toBe(true);
+  });
+
+  it("reports duplicate and missing relationship references", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.relationships = [
+      {
+        id: "same-rule",
+        label: "Missing subject",
+        enabled: true,
+        mode: "near",
+        subject: { propIds: ["missing-prop"] },
+        target: { kind: "fixture", fixtureIds: ["missing-fixture"] },
+        distance: 80,
+        tolerance: 100,
+        strength: 1
+      },
+      {
+        id: "same-rule",
+        label: "Duplicate",
+        enabled: true,
+        mode: "avoid",
+        subject: { tags: ["missing-tag"] },
+        target: { kind: "prop", tags: ["missing-target-tag"] },
+        distance: 100,
+        tolerance: 100,
+        strength: 1
+      }
+    ];
+    const report = validateScene(scene);
+    expect(report.errors.some((issue) => issue.message.includes("Duplicate id"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("missing prop"))).toBe(true);
+    expect(report.errors.some((issue) => issue.message.includes("missing fixture"))).toBe(true);
+    expect(report.warnings.some((issue) => issue.message.includes("subject matches no current props"))).toBe(true);
+    expect(report.warnings.some((issue) => issue.message.includes("target matches no current"))).toBe(true);
+  });
 });

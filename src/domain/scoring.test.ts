@@ -3,6 +3,11 @@ import { applyCostProfile } from "./costProfiles";
 import { cloneScene } from "./optimizer";
 import { galleyKitchen } from "./presets";
 import { scoreScene } from "./scoring";
+import type { RelationshipRule } from "./types";
+
+function relationshipRaw(scene: ReturnType<typeof cloneScene>): number {
+  return scoreScene(scene).terms.find((term) => term.key === "proximity")!.raw;
+}
 
 describe("scoring", () => {
   it("penalizes collisions", () => {
@@ -30,6 +35,101 @@ describe("scoring", () => {
     const nearProximity = scoreScene(near).terms.find((term) => term.key === "proximity")!.weighted;
     const farProximity = scoreScene(far).terms.find((term) => term.key === "proximity")!.weighted;
     expect(nearProximity).toBeLessThan(farProximity);
+  });
+
+  it("scores configurable near prop-to-fixture rules", () => {
+    const rule: RelationshipRule = {
+      id: "soap-sink",
+      label: "Soap near sink",
+      enabled: true,
+      mode: "near",
+      subject: { propIds: ["soap"] },
+      target: { kind: "fixture", fixtureIds: ["sink"] },
+      distance: 70,
+      tolerance: 120,
+      strength: 1
+    };
+    const near = cloneScene(galleyKitchen);
+    const far = cloneScene(galleyKitchen);
+    near.relationships = [rule];
+    far.relationships = [rule];
+    near.props.find((prop) => prop.id === "soap")!.pose = { x: 365, y: 138, rotation: 0, surfaceId: "back-run" };
+    far.props.find((prop) => prop.id === "soap")!.pose = { x: 780, y: 190, rotation: 0, surfaceId: "back-run" };
+    expect(relationshipRaw(near)).toBeLessThan(relationshipRaw(far));
+  });
+
+  it("scores configurable near prop-to-prop rules", () => {
+    const rule: RelationshipRule = {
+      id: "board-soap",
+      label: "Board near soap",
+      enabled: true,
+      mode: "near",
+      subject: { propIds: ["board"] },
+      target: { kind: "prop", propIds: ["soap"] },
+      distance: 70,
+      tolerance: 140,
+      strength: 1
+    };
+    const near = cloneScene(galleyKitchen);
+    const far = cloneScene(galleyKitchen);
+    near.relationships = [rule];
+    far.relationships = [rule];
+    near.props.find((prop) => prop.id === "board")!.pose = { x: 430, y: 156, rotation: 0, surfaceId: "back-run" };
+    near.props.find((prop) => prop.id === "soap")!.pose = { x: 365, y: 156, rotation: 0, surfaceId: "back-run" };
+    far.props.find((prop) => prop.id === "board")!.pose = { x: 760, y: 156, rotation: 0, surfaceId: "back-run" };
+    far.props.find((prop) => prop.id === "soap")!.pose = { x: 365, y: 156, rotation: 0, surfaceId: "back-run" };
+    expect(relationshipRaw(near)).toBeLessThan(relationshipRaw(far));
+  });
+
+  it("scores configurable avoid prop-to-prop rules", () => {
+    const rule: RelationshipRule = {
+      id: "display-utility",
+      label: "Display away from utility",
+      enabled: true,
+      mode: "avoid",
+      subject: { propIds: ["plant"] },
+      target: { kind: "prop", propIds: ["kettle"] },
+      distance: 140,
+      tolerance: 160,
+      strength: 1
+    };
+    const near = cloneScene(galleyKitchen);
+    const far = cloneScene(galleyKitchen);
+    near.relationships = [rule];
+    far.relationships = [rule];
+    near.props.find((prop) => prop.id === "plant")!.pose = { x: 175, y: 250, rotation: 0, surfaceId: "left-run" };
+    far.props.find((prop) => prop.id === "plant")!.pose = { x: 720, y: 150, rotation: 0, surfaceId: "back-run" };
+    expect(relationshipRaw(near)).toBeGreaterThan(relationshipRaw(far));
+  });
+
+  it("lets disabled and empty relationship rules contribute zero", () => {
+    const disabled = cloneScene(galleyKitchen);
+    disabled.relationships = [
+      {
+        id: "disabled",
+        label: "Disabled",
+        enabled: false,
+        mode: "near",
+        subject: { tags: ["soap"] },
+        target: { kind: "fixture", fixtureKinds: ["sink"] },
+        distance: 72,
+        tolerance: 120,
+        strength: 1
+      }
+    ];
+    const empty = cloneScene(galleyKitchen);
+    empty.relationships = [];
+    expect(relationshipRaw(disabled)).toBe(0);
+    expect(relationshipRaw(empty)).toBe(0);
+  });
+
+  it("uses default relationship rules for old scenes without relationships", () => {
+    const legacy = cloneScene(galleyKitchen);
+    const disabled = cloneScene(galleyKitchen);
+    delete legacy.relationships;
+    disabled.relationships = [];
+    expect(relationshipRaw(legacy)).toBeGreaterThan(relationshipRaw(disabled));
+    expect(scoreScene(legacy).terms.find((term) => term.key === "proximity")!.label).toBe("Relationships");
   });
 
   it("penalizes blocked access zones", () => {

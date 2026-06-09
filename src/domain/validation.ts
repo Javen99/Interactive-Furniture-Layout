@@ -1,11 +1,14 @@
 import { distance } from "./geometry";
+import { matcherHasCriteria, matcherMatchesProp, targetHasCriteria } from "./relationships";
 import { generateCandidateSlots, generateCandidateSlotsForProp } from "./slots";
 import type {
   AxisAlignedRect,
   CostWeights,
+  FixtureKind,
   LayoutScene,
   Pathway,
   PropItem,
+  RelationshipRule,
   ValidationIssue,
   ValidationReport,
   ValidationSeverity,
@@ -101,6 +104,7 @@ function collectIds(scene: LayoutScene): IdEntry[] {
     ...scene.room.fixtures.map((fixture) => ({ id: fixture.id, target: { kind: "fixture" as const, id: fixture.id, field: "id" } })),
     ...(scene.room.accessZones ?? []).map((zone) => ({ id: zone.id, target: { kind: "accessZone" as const, id: zone.id, field: "id" } })),
     ...(scene.room.pathways ?? []).map((pathway) => ({ id: pathway.id, target: { kind: "pathway" as const, id: pathway.id, field: "id" } })),
+    ...(scene.relationships ?? []).map((rule) => ({ id: rule.id, target: { kind: "relationship" as const, id: rule.id, field: "id" } })),
     ...scene.props.map((prop) => ({ id: prop.id, target: { kind: "prop" as const, id: prop.id, field: "id" } }))
   ];
 }
@@ -246,6 +250,94 @@ function validateProp(prop: PropItem, scene: LayoutScene, issues: ValidationIssu
   }
 }
 
+const fixtureKinds: FixtureKind[] = ["sink", "hob", "door", "window"];
+
+function validateRelationship(rule: RelationshipRule, scene: LayoutScene, issues: ValidationIssue[]) {
+  const target = { kind: "relationship" as const, id: rule.id };
+  const propIds = new Set(scene.props.map((prop) => prop.id));
+  const fixtureIds = new Set(scene.room.fixtures.map((fixture) => fixture.id));
+  const subject = rule.subject ?? {};
+
+  if (!rule.id || rule.id.trim().length === 0) {
+    issues.push(makeIssue("error", { ...target, field: "id" }, "Relationship rule is missing an id."));
+  }
+  if (!rule.label || rule.label.trim().length === 0) {
+    issues.push(makeIssue("warning", { ...target, field: "label" }, "Relationship rule has no label."));
+  }
+  if (typeof rule.enabled !== "boolean") {
+    issues.push(makeIssue("error", { ...target, field: "enabled" }, "Relationship enabled must be true or false."));
+  }
+  if (rule.mode !== "near" && rule.mode !== "avoid") {
+    issues.push(makeIssue("error", { ...target, field: "mode" }, "Relationship mode must be near or avoid."));
+  }
+  if (!isFiniteNumber(rule.distance) || rule.distance < 0) {
+    issues.push(makeIssue("error", { ...target, field: "distance" }, "Relationship distance must be zero or greater."));
+  }
+  if (!isFiniteNumber(rule.tolerance) || rule.tolerance <= 0) {
+    issues.push(makeIssue("error", { ...target, field: "tolerance" }, "Relationship tolerance must be greater than zero."));
+  }
+  if (!isFiniteNumber(rule.strength) || rule.strength < 0) {
+    issues.push(makeIssue("error", { ...target, field: "strength" }, "Relationship strength must be zero or greater."));
+  }
+  if (!rule.subject || !matcherHasCriteria(subject)) {
+    issues.push(makeIssue("error", { ...target, field: "subject" }, "Relationship subject must include prop ids or tags."));
+  }
+  if (!rule.target || !targetHasCriteria(rule.target)) {
+    issues.push(makeIssue("error", { ...target, field: "target" }, "Relationship target must include fixture/prop ids, fixture kinds, or prop tags."));
+    return;
+  }
+
+  for (const propId of subject.propIds ?? []) {
+    if (!propIds.has(propId)) {
+      issues.push(makeIssue("error", { ...target, field: "subject.propIds" }, `Relationship subject references missing prop "${propId}".`));
+    }
+  }
+
+  if (rule.target.kind === "fixture") {
+    for (const fixtureId of rule.target.fixtureIds ?? []) {
+      if (!fixtureIds.has(fixtureId)) {
+        issues.push(makeIssue("error", { ...target, field: "target.fixtureIds" }, `Relationship target references missing fixture "${fixtureId}".`));
+      }
+    }
+    for (const kind of rule.target.fixtureKinds ?? []) {
+      if (!fixtureKinds.includes(kind)) {
+        issues.push(makeIssue("error", { ...target, field: "target.fixtureKinds" }, `Relationship target has invalid fixture kind "${kind}".`));
+      }
+    }
+  } else if (rule.target.kind === "prop") {
+    for (const propId of rule.target.propIds ?? []) {
+      if (!propIds.has(propId)) {
+        issues.push(makeIssue("error", { ...target, field: "target.propIds" }, `Relationship target references missing prop "${propId}".`));
+      }
+    }
+  } else {
+    issues.push(makeIssue("error", { ...target, field: "target.kind" }, "Relationship target kind must be fixture or prop."));
+    return;
+  }
+
+  if (!rule.enabled) {
+    return;
+  }
+
+  if (rule.subject && !scene.props.some((prop) => matcherMatchesProp(subject, prop))) {
+    issues.push(makeIssue("warning", { ...target, field: "subject" }, "Relationship subject matches no current props."));
+  }
+
+  let targetMatches = false;
+  if (rule.target.kind === "fixture") {
+    const fixtureTarget = rule.target;
+    targetMatches = scene.room.fixtures.some(
+      (fixture) => fixtureTarget.fixtureIds?.includes(fixture.id) || fixtureTarget.fixtureKinds?.includes(fixture.kind)
+    );
+  } else {
+    const propTarget = rule.target;
+    targetMatches = scene.props.some((prop) => propTarget.propIds?.includes(prop.id) || propTarget.tags?.some((tag) => prop.tags.includes(tag)));
+  }
+  if (!targetMatches) {
+    issues.push(makeIssue("warning", { ...target, field: "target" }, "Relationship target matches no current fixtures or props."));
+  }
+}
+
 export function validateScene(scene: LayoutScene): ValidationReport {
   const issues: ValidationIssue[] = [];
   validateRoom(scene, issues);
@@ -297,6 +389,10 @@ export function validateScene(scene: LayoutScene): ValidationReport {
 
   for (const prop of scene.props) {
     validateProp(prop, scene, issues);
+  }
+
+  for (const rule of scene.relationships ?? []) {
+    validateRelationship(rule, scene, issues);
   }
 
   const errors = issues.filter((issue) => issue.severity === "error");

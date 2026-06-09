@@ -1,5 +1,54 @@
 import { defaultWeights } from "./scoring";
-import type { LayoutScene } from "./types";
+import type { LayoutScene, RelationshipRule } from "./types";
+
+function kitchenRelationshipRules(): RelationshipRule[] {
+  return [
+    {
+      id: "washing-near-sink",
+      label: "Washing props near sink",
+      enabled: true,
+      mode: "near",
+      subject: { tags: ["soap", "washing", "towel"] },
+      target: { kind: "fixture", fixtureKinds: ["sink"] },
+      distance: 72,
+      tolerance: 120,
+      strength: 1
+    },
+    {
+      id: "cooking-near-hob",
+      label: "Cooking props near hob",
+      enabled: true,
+      mode: "near",
+      subject: { tags: ["pan", "pot", "cooking", "spice"] },
+      target: { kind: "fixture", fixtureKinds: ["hob"] },
+      distance: 90,
+      tolerance: 140,
+      strength: 1
+    },
+    {
+      id: "display-spacing",
+      label: "Display props need spacing",
+      enabled: true,
+      mode: "avoid",
+      subject: { tags: ["display"] },
+      target: { kind: "prop", tags: ["display"] },
+      distance: 110,
+      tolerance: 130,
+      strength: 0.55
+    },
+    {
+      id: "display-away-utility",
+      label: "Display away from utility props",
+      enabled: true,
+      mode: "avoid",
+      subject: { tags: ["display"] },
+      target: { kind: "prop", tags: ["utility"] },
+      distance: 120,
+      tolerance: 140,
+      strength: 0.4
+    }
+  ];
+}
 
 export const galleyKitchen: LayoutScene = {
   id: "galley-worktop",
@@ -37,6 +86,7 @@ export const galleyKitchen: LayoutScene = {
     viewPoint: { x: 450, y: 522 },
     focalPoint: { x: 450, y: 120 }
   },
+  relationships: kitchenRelationshipRules(),
   weights: defaultWeights,
   props: [
     {
@@ -152,6 +202,7 @@ export const islandPrep: LayoutScene = {
     viewPoint: { x: 450, y: 594 },
     focalPoint: { x: 450, y: 170 }
   },
+  relationships: kitchenRelationshipRules(),
   weights: defaultWeights,
   props: [
     {
@@ -270,6 +321,7 @@ export const compactCorner: LayoutScene = {
     viewPoint: { x: 410, y: 520 },
     focalPoint: { x: 492, y: 150 }
   },
+  relationships: kitchenRelationshipRules(),
   weights: defaultWeights,
   props: [
     {
@@ -381,6 +433,7 @@ export const servingRun: LayoutScene = {
     viewPoint: { x: 470, y: 480 },
     focalPoint: { x: 470, y: 130 }
   },
+  relationships: kitchenRelationshipRules(),
   weights: defaultWeights,
   props: [
     {
@@ -464,4 +517,139 @@ export const servingRun: LayoutScene = {
   ]
 };
 
-export const presets = [galleyKitchen, islandPrep, compactCorner, servingRun];
+export const relationshipBench: LayoutScene = {
+  id: "relationship-bench",
+  name: "Relationship Bench",
+  description: "A synthetic counter where props start near the wrong fixtures and display items are crowded.",
+  metadata: {
+    difficulty: "moderate",
+    baselineName: "Swapped relationships",
+    evaluationSeeds: ["mike", "november", "oscar"]
+  },
+  room: {
+    width: 940,
+    height: 540,
+    walls: [{ id: "wall-top", label: "Top wall", x: 70, y: 44, width: 800, height: 10 }],
+    surfaces: [{ id: "main-counter", label: "Main counter", kind: "worktop", wallEdge: "top", x: 96, y: 82, width: 748, height: 154 }],
+    fixtures: [
+      { id: "sink", label: "Sink", kind: "sink", surfaceId: "main-counter", x: 156, y: 112, width: 108, height: 72, clearance: 26 },
+      { id: "hob", label: "Hob", kind: "hob", surfaceId: "main-counter", x: 666, y: 112, width: 116, height: 76, clearance: 30 },
+      { id: "window", label: "Window", kind: "window", x: 382, y: 44, width: 180, height: 10, clearance: 0 }
+    ],
+    accessZones: [
+      { id: "sink-approach", label: "Sink access", kind: "fixture", targetId: "sink", x: 144, y: 184, width: 132, height: 38, importance: 1.15 },
+      { id: "hob-approach", label: "Hob access", kind: "fixture", targetId: "hob", x: 648, y: 188, width: 152, height: 34, importance: 1.25 },
+      { id: "counter-front", label: "Counter front", kind: "worktopFront", targetId: "main-counter", x: 130, y: 204, width: 680, height: 30, importance: 0.65 }
+    ],
+    pathways: [
+      {
+        id: "serving-route",
+        label: "Serving route",
+        start: { x: 146, y: 292 },
+        waypoints: [{ x: 470, y: 292 }],
+        end: { x: 800, y: 292 },
+        width: 86,
+        importance: 0.75
+      }
+    ],
+    viewPoint: { x: 470, y: 500 },
+    focalPoint: { x: 470, y: 132 }
+  },
+  relationships: [
+    ...kitchenRelationshipRules(),
+    {
+      id: "prep-near-sink",
+      label: "Prep board near sink",
+      enabled: true,
+      mode: "near",
+      subject: { tags: ["prep"] },
+      target: { kind: "fixture", fixtureKinds: ["sink"] },
+      distance: 150,
+      tolerance: 170,
+      strength: 0.7
+    }
+  ],
+  weights: defaultWeights,
+  props: [
+    {
+      id: "soap",
+      label: "Soap",
+      tags: ["soap", "washing"],
+      width: 34,
+      height: 30,
+      pose: { x: 748, y: 176, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0, 90],
+      pinned: false,
+      color: "#2f9e8f",
+      preference: "backEdge"
+    },
+    {
+      id: "pan",
+      label: "Pan",
+      tags: ["pan", "cooking", "aligned"],
+      width: 78,
+      height: 48,
+      pose: { x: 230, y: 178, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0, 90],
+      pinned: false,
+      color: "#546a7b",
+      preference: "frontEdge"
+    },
+    {
+      id: "board",
+      label: "Board",
+      tags: ["prep", "aligned"],
+      width: 94,
+      height: 60,
+      pose: { x: 612, y: 154, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0, 90],
+      pinned: false,
+      color: "#b7794c",
+      preference: "center"
+    },
+    {
+      id: "tray",
+      label: "Tray",
+      tags: ["display", "aligned"],
+      width: 106,
+      height: 60,
+      pose: { x: 432, y: 154, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0, 90],
+      pinned: false,
+      color: "#6a8caf",
+      preference: "display"
+    },
+    {
+      id: "bowl",
+      label: "Bowl",
+      tags: ["display"],
+      width: 56,
+      height: 56,
+      pose: { x: 492, y: 154, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0],
+      pinned: false,
+      color: "#8f6aae",
+      preference: "display"
+    },
+    {
+      id: "coffee",
+      label: "Coffee",
+      tags: ["appliance", "utility", "aligned"],
+      width: 76,
+      height: 58,
+      pose: { x: 548, y: 154, rotation: 0, surfaceId: "main-counter" },
+      allowedSurfaceIds: ["main-counter"],
+      orientationOptions: [0],
+      pinned: true,
+      color: "#7a5c58",
+      preference: "backEdge"
+    }
+  ]
+};
+
+export const presets = [galleyKitchen, islandPrep, compactCorner, servingRun, relationshipBench];

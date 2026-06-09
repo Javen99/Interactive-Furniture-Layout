@@ -40,8 +40,9 @@ The implementation here is deliberately hobby-sized. It does not use proprietary
 - Scene validation for duplicate IDs, missing references, invalid dimensions, invalid weights, invalid pathways, and out-of-room warnings.
 - Undo and redo for scene-authoring edits, imports, resets, suggestion application, and cost-weight changes.
 - Cost-weight profiles for balanced, accessibility-first, display-first, and custom scoring.
+- Editable relationship rules for near/avoid prop-to-fixture and prop-to-prop preferences.
 - Seeded simulated-annealing optimizer with ranked suggestions and candidate-slot placement proposals.
-- Score breakdown for bounds, collisions, pinned movement, clearance, proximity, surface fit, alignment, balance, and visibility.
+- Score breakdown for bounds, collisions, pinned movement, clearance, relationships, surface fit, alignment, balance, and visibility.
 - Scenario gallery with repeated-seed benchmark summaries.
 - Deterministic benchmark-seed replay for reproducing ranked suggestions.
 - Optimizer diagnostics for accepted/rejected moves, score history, and rejected cost causes.
@@ -49,7 +50,7 @@ The implementation here is deliberately hobby-sized. It does not use proprietary
 - Candidate slot previews for the selected prop, showing plausible legal placements around fixtures, access zones, and pathways.
 - Downloadable scene JSON, benchmark reports, and study reports for sharing scenario evidence.
 - Blind A/B review mode with local preference voting and exportable study reports.
-- Unit tests for geometry, routed pathways, slot generation, scoring, validation, authoring, and optimizer repeatability.
+- Unit tests for geometry, routed pathways, relationship rules, slot generation, scoring, validation, authoring, and optimizer repeatability.
 
 ## Tech Stack
 
@@ -98,6 +99,7 @@ GitHub Pages is configured through `.github/workflows/pages.yml`.
 - `src/domain/sceneHistory.ts`: lightweight undo/redo scene snapshots.
 - `src/domain/downloads.ts`: JSON download metadata and browser download helper.
 - `src/domain/geometry.ts`: oriented rectangle math, containment, overlap, and placement helpers.
+- `src/domain/relationships.ts`: data-driven near/avoid relationship rules and candidate-pose penalties.
 - `src/domain/slots.ts`: deterministic candidate surface-slot generation and quality scoring.
 - `src/domain/scoring.ts`: weighted guideline terms.
 - `src/domain/optimizer.ts`: deterministic stochastic search.
@@ -111,6 +113,7 @@ GitHub Pages is configured through `.github/workflows/pages.yml`.
 - Check the validation panel before running benchmarks; hard errors block optimization, warnings flag odd but runnable scenes.
 - Use Replay seeds to regenerate ranked suggestions from the same scenario seeds and confirm optimizer changes remain deterministic.
 - Tune cost profiles intentionally: accessibility-first should improve clear approaches and pathways, while display-first should prioritize balance and visibility.
+- Use Relationship Rules to inspect or tune why props prefer certain fixture/prop distances; old scenes without rules still use built-in defaults.
 - Select a prop to inspect candidate slot previews; the best outlined slot should avoid blocked fixtures, access zones, and route corridors.
 - Use Blind Review to record score-hidden A/B preferences, then export a study report for qualitative evidence.
 - Add or edit synthetic scenarios when introducing a new term so regressions are visible in tests and exported reports.
@@ -118,5 +121,5 @@ GitHub Pages is configured through `.github/workflows/pages.yml`.
 ## Roadmap
 
 - Add a Web Worker only if benchmark runs become visibly blocking.
-- Add richer prop relationship rules and stronger scenario benchmark coverage before attempting whole-room furniture layout.
+- Add stronger scenario benchmark coverage and richer report comparisons before attempting whole-room furniture layout.
 - Keep Unity/C# as a later port target once this TypeScript version is a stable reference.

@@ -14,7 +14,7 @@ const weightLabels: Array<{ key: keyof CostWeights; label: string }> = [
   { key: "collision", label: "Collision" },
   { key: "pinned", label: "Pinned" },
   { key: "clearance", label: "Clearance" },
-  { key: "proximity", label: "Proximity" },
+  { key: "proximity", label: "Relations" },
   { key: "centerEdge", label: "Surface" },
   { key: "alignment", label: "Align" },
   { key: "balance", label: "Balance" },

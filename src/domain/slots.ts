@@ -11,18 +11,10 @@ import {
   orientedRectsOverlap,
   rectCenter
 } from "./geometry";
-import type { CandidateSlot, Fixture, LayoutScene, PropItem, SlotGenerationOptions, Surface } from "./types";
+import { relationshipPenaltyForCandidate } from "./relationships";
+import type { CandidateSlot, LayoutScene, PropItem, SlotGenerationOptions, Surface } from "./types";
 
 const defaultMaxSlots = 24;
-
-const fixtureTargets: Array<{ fixture: Fixture["kind"]; tags: string[]; preferred: number; tolerance: number }> = [
-  { fixture: "sink", tags: ["soap", "washing", "towel"], preferred: 72, tolerance: 120 },
-  { fixture: "hob", tags: ["pan", "pot", "cooking", "spice"], preferred: 90, tolerance: 140 }
-];
-
-function hasAnyTag(prop: PropItem, tags: string[]): boolean {
-  return tags.some((tag) => prop.tags.includes(tag));
-}
 
 function slotRect(prop: PropItem, surface: Surface, x: number, y: number, rotation: number) {
   return {
@@ -57,21 +49,6 @@ function surfacePreferencePenalty(prop: PropItem, surface: Surface, x: number, y
     default:
       return 0;
   }
-}
-
-function proximityPenalty(scene: LayoutScene, prop: PropItem, x: number, y: number): number {
-  let penalty = 0;
-  for (const target of fixtureTargets) {
-    if (!hasAnyTag(prop, target.tags)) {
-      continue;
-    }
-    const fixtures = scene.room.fixtures.filter((fixture) => fixture.kind === target.fixture);
-    const closest = fixtures.reduce((best, fixture) => Math.min(best, distance({ x, y }, rectCenter(fixture))), Number.POSITIVE_INFINITY);
-    if (Number.isFinite(closest)) {
-      penalty += clamp(Math.abs(closest - target.preferred) / target.tolerance, 0, 1.5);
-    }
-  }
-  return penalty;
 }
 
 function candidatePoints(bounds: ReturnType<typeof getPlacementBounds>): Array<{ x: number; y: number }> {
@@ -167,7 +144,7 @@ export function generateCandidateSlots(
       }
 
       const preference = surfacePreferencePenalty(prop, surface, point.x, point.y);
-      const proximity = proximityPenalty(scene, prop, point.x, point.y);
+      const proximity = relationshipPenaltyForCandidate(scene, prop, { x: point.x, y: point.y, rotation, surfaceId: surface.id });
       const totalPenalty = preference + fixturePenalty * 2.5 + accessPenalty * 1.8 + pathwayPenalty * 1.6 + proximity;
       slots.push({
         id: `${prop.id}:${surface.id}:${Math.round(point.x)}:${Math.round(point.y)}:${rotation}`,

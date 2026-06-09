@@ -800,6 +800,72 @@ button:disabled {
   padding: 4px 2px;
 }
 
+.relationship-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.relationship-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.relationship-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  height: auto;
+  justify-content: stretch;
+  text-align: left;
+  padding: 8px;
+  gap: 2px 7px;
+}
+
+.relationship-row.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.relationship-row span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.relationship-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationship-row small {
+  grid-column: 2;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationship-editor {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.relationship-editor input[type="checkbox"] {
+  justify-self: start;
+  width: 18px;
+  height: 18px;
+}
+
+.relationship-editor > button {
+  width: 100%;
+}
+
 .weight-field {
   display: grid;
   grid-template-columns: 68px minmax(0, 1fr) 36px;

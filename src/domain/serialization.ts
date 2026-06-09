@@ -21,6 +21,7 @@ export function importScene(json: string): LayoutScene {
       accessZones: Array.isArray(parsed.room.accessZones) ? parsed.room.accessZones : undefined,
       pathways: Array.isArray(parsed.room.pathways) ? parsed.room.pathways : undefined
     },
+    relationships: Array.isArray(parsed.relationships) ? parsed.relationships : undefined,
     weights: {
       ...defaultWeights,
       ...(parsed.weights ?? {})

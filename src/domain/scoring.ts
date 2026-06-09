@@ -15,6 +15,7 @@ import {
   propToOrientedRect,
   rectCenter
 } from "./geometry";
+import { scoreRelationshipRules } from "./relationships";
 import type { CostWeights, Fixture, LayoutScene, PropItem, ScoreResult, ScoreTerm, ScoreTermKey, Surface } from "./types";
 
 export const defaultWeights: CostWeights = {
@@ -35,7 +36,7 @@ const termLabels: Record<ScoreTermKey, string> = {
   collision: "Collisions",
   pinned: "Pinned",
   clearance: "Clearance",
-  proximity: "Proximity",
+  proximity: "Relationships",
   centerEdge: "Surface fit",
   alignment: "Alignment",
   balance: "Balance",
@@ -48,18 +49,13 @@ const termExplanations: Record<ScoreTermKey, string> = {
   collision: "Props should not overlap each other or fixed sink/hob cutouts.",
   pinned: "Pinned props should remain fixed while other props move.",
   clearance: "Sink and hob access zones should stay open.",
-  proximity: "Tagged props prefer nearby fixtures, such as soap near the sink.",
+  proximity: "Relationship rules prefer useful prop-to-fixture and prop-to-prop distances.",
   centerEdge: "Each prop prefers a practical zone on its surface.",
   alignment: "Rectangular props prefer clean worktop/wall alignment.",
   balance: "Props should not cluster heavily on one side of a surface.",
   visibility: "Display props prefer the focal view corridor.",
   accessibility: "Approach zones and pathways should stay usable."
 };
-
-const fixtureTargets: Array<{ fixture: Fixture["kind"]; tags: string[]; preferred: number; tolerance: number }> = [
-  { fixture: "sink", tags: ["soap", "washing", "towel"], preferred: 72, tolerance: 120 },
-  { fixture: "hob", tags: ["pan", "pot", "cooking", "spice"], preferred: 90, tolerance: 140 }
-];
 
 const hardTermKeys: ScoreTermKey[] = ["containment", "collision", "pinned"];
 
@@ -74,10 +70,6 @@ function makeTerm(key: ScoreTermKey, raw: number, weights: CostWeights): ScoreTe
     weighted: Number((roundedRaw * weight).toFixed(2)),
     explanation: termExplanations[key]
   };
-}
-
-function hasAnyTag(prop: PropItem, tags: string[]): boolean {
-  return tags.some((tag) => prop.tags.includes(tag));
 }
 
 function fixturesOnSurface(fixtures: Fixture[], surfaceId: string): Fixture[] {
@@ -124,7 +116,7 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
   let collision = 0;
   let pinned = 0;
   let clearance = 0;
-  let proximity = 0;
+  const proximity = scoreRelationshipRules(scene);
   let centerEdge = 0;
   let alignment = 0;
   let balance = 0;
@@ -182,19 +174,6 @@ export function scoreScene(scene: LayoutScene, baseline: LayoutScene = scene): S
       if (orientedRectsOverlap(rect, axisRectToOrientedRect(expanded))) {
         const distanceToFixture = distanceBetweenAxisRects(orientedRectAabb(rect), fixture);
         clearance += clamp((fixture.clearance - distanceToFixture) / Math.max(fixture.clearance, 1), 0, 1);
-      }
-    }
-  }
-
-  for (const target of fixtureTargets) {
-    const matchingFixtures = scene.room.fixtures.filter((fixture) => fixture.kind === target.fixture);
-    for (const prop of scene.props.filter((candidate) => hasAnyTag(candidate, target.tags))) {
-      const closest = matchingFixtures.reduce(
-        (best, fixture) => Math.min(best, distance(prop.pose, rectCenter(fixture))),
-        Number.POSITIVE_INFINITY
-      );
-      if (Number.isFinite(closest)) {
-        proximity += clamp(Math.abs(closest - target.preferred) / target.tolerance, 0, 1.5);
       }
     }
   }

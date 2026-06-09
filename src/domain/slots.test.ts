@@ -49,4 +49,57 @@ describe("candidate slots", () => {
       rotation: slot.rotation
     });
   });
+
+  it("ranks relationship-friendly slots ahead of poor near-rule slots", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.room.accessZones = [];
+    scene.room.pathways = [];
+    scene.room.fixtures = [];
+    scene.relationships = [
+      {
+        id: "soap-kettle",
+        label: "Soap near kettle",
+        enabled: true,
+        mode: "near",
+        subject: { propIds: ["soap"] },
+        target: { kind: "prop", propIds: ["kettle"] },
+        distance: 70,
+        tolerance: 120,
+        strength: 1
+      }
+    ];
+    const prop = { ...scene.props.find((candidate) => candidate.id === "soap")!, preference: "none" as const };
+    const surface = scene.room.surfaces.find((candidate) => candidate.id === "left-run")!;
+    const slots = generateCandidateSlots(scene, prop, surface, { includeCurrentRotation: true, maxSlots: 24 });
+    const bestRelationship = [...slots].sort((a, b) => a.penalties.proximity - b.penalties.proximity)[0];
+    const worstRelationship = [...slots].sort((a, b) => b.penalties.proximity - a.penalties.proximity)[0];
+    expect(bestRelationship.penalties.proximity).toBeLessThan(worstRelationship.penalties.proximity);
+    expect(bestRelationship.quality).toBeGreaterThan(worstRelationship.quality);
+  });
+
+  it("ranks avoid-rule slots away from undesirable prop targets", () => {
+    const scene = cloneScene(galleyKitchen);
+    scene.room.accessZones = [];
+    scene.room.pathways = [];
+    scene.relationships = [
+      {
+        id: "plant-kettle",
+        label: "Display away from utility",
+        enabled: true,
+        mode: "avoid",
+        subject: { propIds: ["plant"] },
+        target: { kind: "prop", propIds: ["kettle"] },
+        distance: 130,
+        tolerance: 130,
+        strength: 1
+      }
+    ];
+    const prop = { ...scene.props.find((candidate) => candidate.id === "plant")!, preference: "none" as const };
+    const surface = scene.room.surfaces.find((candidate) => candidate.id === "left-run")!;
+    const slots = generateCandidateSlots(scene, prop, surface, { includeCurrentRotation: true, maxSlots: 24 });
+    const bestRelationship = [...slots].sort((a, b) => a.penalties.proximity - b.penalties.proximity)[0];
+    const worstRelationship = [...slots].sort((a, b) => b.penalties.proximity - a.penalties.proximity)[0];
+    expect(bestRelationship.penalties.proximity).toBeLessThan(worstRelationship.penalties.proximity);
+    expect(bestRelationship.quality).toBeGreaterThan(worstRelationship.quality);
+  });
 });
